@@ -10,6 +10,7 @@ import {
    StartRunResult,
 } from '@/lib/api/runner';
 import { RunnerApiResponse, RunnerErrorCode, RunnerStatusData } from '@/types/runner';
+import { useSettings } from '@/hooks/use-settings';
 
 export const runnerKeys = {
    all: ['runner'] as const,
@@ -39,13 +40,26 @@ export function runnerErrorMessage(code: RunnerErrorCode | undefined, fallback?:
          return fallback || 'No eligible pending task found in the current tag.';
       case 'RUN_NOT_FOUND':
          return fallback || 'The run is no longer active.';
+      case 'RUNNER_DISABLED':
+         return fallback || 'The runner is disabled in Settings → Runner.';
+      case 'MODE_NOT_ALLOWED':
+         return fallback || 'This runner mode is not allowed in Settings → Security & Access.';
+      case 'DEPENDENCIES_INCOMPLETE':
+         return fallback || 'This task has incomplete dependencies.';
       default:
          return fallback || 'Runner request failed.';
    }
 }
 
-/** Polls runner status; faster while a run is active. Shared across all consumers. */
+/**
+ * Polls runner status; faster while a run is active. Poll rates come from
+ * Settings → Preferences. Shared across all consumers.
+ */
 export function useRunnerStatus() {
+   const { data: settings } = useSettings();
+   const prefs = settings?.preferences;
+   const activeInterval = prefs?.taskRefreshIntervalMs ?? ACTIVE_POLL_MS;
+
    return useQuery({
       queryKey: runnerKeys.status(),
       queryFn: async (): Promise<RunnerStatusData> => {
@@ -55,12 +69,20 @@ export function useRunnerStatus() {
          }
          return result.data;
       },
-      refetchInterval: (query) => (query.state.data?.activeRun ? ACTIVE_POLL_MS : IDLE_POLL_MS),
+      refetchInterval: (query) => {
+         if (prefs && !prefs.autoRefreshTasks) return false;
+         return query.state.data?.activeRun ? activeInterval : IDLE_POLL_MS;
+      },
    });
 }
 
-/** Polls a run's log tail while the run is active. */
+/** Polls a run's log tail while the run is active (interval from Preferences). */
 export function useRunnerLogs(runId: string | null, isActive: boolean) {
+   const { data: settings } = useSettings();
+   const prefs = settings?.preferences;
+   const interval = prefs?.logRefreshIntervalMs ?? LOG_POLL_MS;
+   const autoRefresh = prefs?.logAutoRefresh ?? true;
+
    return useQuery({
       queryKey: runnerKeys.logs(runId ?? 'none'),
       queryFn: async () => {
@@ -71,7 +93,7 @@ export function useRunnerLogs(runId: string | null, isActive: boolean) {
          return result.data;
       },
       enabled: !!runId,
-      refetchInterval: isActive ? LOG_POLL_MS : false,
+      refetchInterval: isActive && autoRefresh ? interval : false,
    });
 }
 

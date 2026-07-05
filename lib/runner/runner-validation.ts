@@ -1,21 +1,12 @@
 import path from 'path';
 import { promises as fs } from 'fs';
 import { getTaskmasterPath } from '@/lib/taskmaster-paths';
-import { RunnerMode, taskIdSchema, runIdSchema } from '@/types/runner';
+import { RunnerErrorCode, RunnerMode, taskIdSchema, runIdSchema } from '@/types/runner';
 
 /** Error type carrying a machine-readable code and an HTTP status. */
 export class RunnerError extends Error {
    constructor(
-      public code:
-         | 'INVALID_TASK_ID'
-         | 'INVALID_PROJECT_ROOT'
-         | 'INVALID_RUN_ID'
-         | 'RUNNER_BUSY'
-         | 'TM_NOT_FOUND'
-         | 'RUN_NOT_FOUND'
-         | 'LOG_NOT_FOUND'
-         | 'NO_NEXT_TASK'
-         | 'INTERNAL_ERROR',
+      public code: RunnerErrorCode,
       message: string,
       public httpStatus: number = 400
    ) {
@@ -46,7 +37,11 @@ export function getTmBin(): string {
  * where client-supplied strings become arguments other than the
  * already-validated numeric task ID.
  */
-export function buildRunnerCommand(mode: RunnerMode, taskId?: string | null): string[] {
+export function buildRunnerCommand(
+   mode: RunnerMode,
+   taskId?: string | null,
+   tmBin: string = getTmBin()
+): string[] {
    switch (mode) {
       case 'run-task':
       case 'run-next': {
@@ -54,12 +49,12 @@ export function buildRunnerCommand(mode: RunnerMode, taskId?: string | null): st
          if (!taskId || !isValidTaskId(taskId)) {
             throw new RunnerError('INVALID_TASK_ID', `Invalid task ID: ${JSON.stringify(taskId)}`);
          }
-         return [getTmBin(), 'start', taskId];
+         return [tmBin, 'start', taskId];
       }
       case 'loop':
-         return [getTmBin(), 'loop', '--verbose'];
+         return [tmBin, 'loop', '--verbose'];
       case 'loop-sandbox':
-         return [getTmBin(), 'loop', '--sandbox', '--verbose'];
+         return [tmBin, 'loop', '--sandbox', '--verbose'];
       default: {
          const exhaustive: never = mode;
          throw new RunnerError('INTERNAL_ERROR', `Unknown runner mode: ${exhaustive}`, 500);

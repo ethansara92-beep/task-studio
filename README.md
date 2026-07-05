@@ -82,6 +82,15 @@ Logs and run metadata are stored under `.taskmaster/runs/`.
 See [docs/taskmaster-runner.md](docs/taskmaster-runner.md) for requirements (Taskmaster CLI +
 authenticated Claude Code), the safety model, and known limitations.
 
+### Settings
+
+A Linear-inspired Settings area (`/settings`) with grouped navigation: general preferences,
+project roots and allowlists, Taskmaster & Claude Code CLI paths with live validation, runner
+policies and retention, workflow/status mapping, labels, prompt templates, notifications,
+integrations, outgoing webhooks, import/export, diagnostics, and security policies. Settings
+persist to a versioned, validated `.taskmaster/task-studio-settings.json` (machine-local,
+git-ignored). See [docs/settings.md](docs/settings.md).
+
 ### Real-time Sync
 
 The UI uses WebSocket and file watchers to detect changes to:

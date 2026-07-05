@@ -55,3 +55,7 @@ next-env.d.ts
 # taskmaster runner artifacts (local run logs/metadata)
 .taskmaster/runs/
 .taskmaster/runner.lock
+
+# machine-local Task Studio settings & audit log
+.taskmaster/task-studio-settings.json*
+.taskmaster/task-studio-audit.log

@@ -13,8 +13,10 @@ import {
    useStartLoop,
    useStopRun,
 } from '@/hooks/use-runner';
+import { useSettings } from '@/hooks/use-settings';
 import { RunRecord } from '@/types/runner';
 import { RunStatusBadge } from './run-status-badge';
+import { ConfirmActionButton } from '@/components/common/settings/settings-ui';
 
 interface RunnerPanelProps {
    /** Plain Taskmaster task ID (e.g. "12" or "12.3") for the open task. */
@@ -38,6 +40,7 @@ function RunMetadata({ run }: { run: RunRecord }) {
 
 export function RunnerPanel({ taskId }: RunnerPanelProps) {
    const { data: status, isLoading } = useRunnerStatus();
+   const { data: settings } = useSettings();
    const runTask = useRunTask();
    const runNext = useRunNext();
    const startLoop = useStartLoop();
@@ -45,6 +48,13 @@ export function RunnerPanel({ taskId }: RunnerPanelProps) {
 
    const activeRun = status?.activeRun ?? null;
    const lock = status?.lock ?? null;
+
+   const runnerEnabled = settings?.runner.enabled ?? true;
+   const confirmRun = settings?.general.confirmBeforeRun ?? false;
+   const confirmStop = settings?.general.confirmBeforeStop ?? true;
+   const confirmLoop = settings?.taskmaster.confirmBeforeLoop ?? true;
+   const preferSandbox = settings?.taskmaster.preferSandbox ?? false;
+   const showLiveLogs = settings?.runner.showLiveLogs ?? true;
 
    // Show the active run's logs, otherwise the most recent finished run.
    const displayedRun = activeRun ?? status?.recentRuns?.[0] ?? null;
@@ -54,7 +64,7 @@ export function RunnerPanel({ taskId }: RunnerPanelProps) {
       data: logs,
       refetch: refetchLogs,
       isFetching: isFetchingLogs,
-   } = useRunnerLogs(displayedRun?.runId ?? null, isRunActive);
+   } = useRunnerLogs(showLiveLogs ? (displayedRun?.runId ?? null) : null, isRunActive);
 
    // Keep the log view pinned to the bottom while a run is producing output.
    const logRef = React.useRef<HTMLPreElement>(null);
@@ -66,7 +76,7 @@ export function RunnerPanel({ taskId }: RunnerPanelProps) {
 
    const isStarting =
       runTask.isPending || runNext.isPending || startLoop.isPending || stopRun.isPending;
-   const canStart = !isRunActive && !isStarting && !(lock && !lock.stale);
+   const canStart = runnerEnabled && !isRunActive && !isStarting && !(lock && !lock.stale);
 
    return (
       <div className="mb-8 rounded-md border">
@@ -76,19 +86,31 @@ export function RunnerPanel({ taskId }: RunnerPanelProps) {
                <RunStatusBadge status={displayedRun && !isLoading ? displayedRun.status : 'idle'} />
             </div>
             {isRunActive && (
-               <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => stopRun.mutate({ runId: activeRun.runId })}
+               <ConfirmActionButton
+                  label={
+                     <>
+                        <Square className="h-3.5 w-3.5" />
+                        Stop Run
+                     </>
+                  }
+                  title="Stop the active run?"
+                  description="The Taskmaster process (and the Claude Code session it launched) will be terminated and the run marked cancelled."
+                  confirmLabel="Stop run"
+                  onConfirm={() => stopRun.mutate({ runId: activeRun.runId })}
                   disabled={stopRun.isPending}
-               >
-                  <Square className="h-3.5 w-3.5" />
-                  Stop Run
-               </Button>
+                  skipConfirm={!confirmStop}
+               />
             )}
          </div>
 
          <div className="space-y-4 p-4">
+            {!runnerEnabled && (
+               <div className="flex items-start gap-2 rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+                  <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  The local runner is disabled. Enable it in Settings → Runner.
+               </div>
+            )}
+
             {/* Stale/foreign lock warning */}
             {lock && !activeRun && (
                <div className="flex items-start gap-2 rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
@@ -109,68 +131,107 @@ export function RunnerPanel({ taskId }: RunnerPanelProps) {
 
             {/* Controls */}
             <div className="flex flex-wrap gap-2">
-               <Button size="sm" onClick={() => runTask.mutate({ taskId })} disabled={!canStart}>
-                  <Play className="h-3.5 w-3.5" />
-                  Run with Claude
-               </Button>
-               <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => runNext.mutate()}
+               <ConfirmActionButton
+                  label={
+                     <>
+                        <Play className="h-3.5 w-3.5" />
+                        Run with Claude
+                     </>
+                  }
+                  title={`Run task ${taskId} with Claude?`}
+                  description="Taskmaster will launch Claude Code to work on this task in your working copy."
+                  confirmLabel="Run task"
+                  variant="default"
+                  onConfirm={() => runTask.mutate({ taskId })}
                   disabled={!canStart}
-               >
-                  <SkipForward className="h-3.5 w-3.5" />
-                  Run Next
-               </Button>
-               <Button
+                  skipConfirm={!confirmRun}
+               />
+               <ConfirmActionButton
+                  label={
+                     <>
+                        <SkipForward className="h-3.5 w-3.5" />
+                        Run Next
+                     </>
+                  }
+                  title="Run the next eligible task?"
+                  description="Task Studio picks the next pending task with completed dependencies and runs it with Claude."
+                  confirmLabel="Run next"
                   variant="outline"
-                  size="sm"
-                  onClick={() => startLoop.mutate({ sandbox: false })}
+                  onConfirm={() => runNext.mutate()}
                   disabled={!canStart}
-               >
-                  <Repeat className="h-3.5 w-3.5" />
-                  Start Loop
-               </Button>
-               <Button
+                  skipConfirm={!confirmRun}
+               />
+               <ConfirmActionButton
+                  label={
+                     <>
+                        <Repeat className="h-3.5 w-3.5" />
+                        Start Loop
+                     </>
+                  }
+                  title="Start an unattended loop?"
+                  description="Taskmaster will keep running available tasks with Claude until it stops or you cancel. This can make many changes to your working copy."
+                  confirmLabel="Start loop"
                   variant="outline"
-                  size="sm"
-                  onClick={() => startLoop.mutate({ sandbox: true })}
+                  onConfirm={() => startLoop.mutate({ sandbox: preferSandbox })}
                   disabled={!canStart}
-               >
-                  <Shield className="h-3.5 w-3.5" />
-                  Start Sandbox Loop
-               </Button>
+                  skipConfirm={!confirmLoop}
+               />
+               <ConfirmActionButton
+                  label={
+                     <>
+                        <Shield className="h-3.5 w-3.5" />
+                        Start Sandbox Loop
+                     </>
+                  }
+                  title="Start a sandboxed loop?"
+                  description="The loop runs inside Taskmaster's Docker sandbox. Requires Docker."
+                  confirmLabel="Start sandbox loop"
+                  variant="outline"
+                  onConfirm={() => startLoop.mutate({ sandbox: true })}
+                  disabled={!canStart}
+                  skipConfirm={!confirmLoop}
+               />
             </div>
+            {preferSandbox && (
+               <p className="text-xs text-muted-foreground">
+                  Sandbox preferred: “Start Loop” uses the Docker sandbox (Settings → Taskmaster &
+                  Claude Code).
+               </p>
+            )}
 
             {/* Run metadata + logs */}
             {displayedRun && (
                <div className="space-y-2">
                   <div className="flex items-center justify-between gap-2">
                      <RunMetadata run={displayedRun} />
-                     <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 shrink-0"
-                        onClick={() => refetchLogs()}
-                        title="Refresh logs"
-                     >
-                        <RefreshCw
-                           className={cn('h-3.5 w-3.5', isFetchingLogs && 'animate-spin')}
-                        />
-                     </Button>
+                     {showLiveLogs && (
+                        <Button
+                           variant="ghost"
+                           size="icon"
+                           className="h-7 w-7 shrink-0"
+                           onClick={() => refetchLogs()}
+                           title="Refresh logs"
+                        >
+                           <RefreshCw
+                              className={cn('h-3.5 w-3.5', isFetchingLogs && 'animate-spin')}
+                           />
+                        </Button>
+                     )}
                   </div>
 
                   {displayedRun.error && (
                      <p className="text-xs text-red-600 dark:text-red-400">{displayedRun.error}</p>
                   )}
 
-                  <pre
-                     ref={logRef}
-                     className="max-h-72 overflow-auto rounded-md bg-muted/40 p-3 font-mono text-xs whitespace-pre-wrap break-words"
-                  >
-                     {logs?.truncated && '… (log truncated, showing latest output)\n'}
-                     {logs?.content || 'No log output yet.'}
-                  </pre>
+                  {showLiveLogs && (
+                     <pre
+                        ref={logRef}
+                        className="max-h-72 overflow-auto rounded-md bg-muted/40 p-3 font-mono text-xs whitespace-pre-wrap break-words"
+                     >
+                        {logs?.truncated && '… (log truncated, showing latest output)\n'}
+                        {logs?.content || 'No log output yet.'}
+                     </pre>
+                  )}
                </div>
             )}
          </div>

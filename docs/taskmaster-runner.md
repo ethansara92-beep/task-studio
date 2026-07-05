@@ -21,8 +21,8 @@ Task Studio UI
 ## Requirements
 
 - **Taskmaster CLI** installed — the `tm` command must work in a terminal.
-  If it lives somewhere unusual, set `TASKMASTER_RUNNER_BIN=/path/to/tm` before starting
-  Task Studio.
+  If it lives somewhere unusual, set its path in **Settings → Taskmaster & Claude Code**
+  (or set `TASKMASTER_RUNNER_BIN=/path/to/tm`, which takes precedence).
 - **Claude Code** installed and authenticated (Taskmaster launches it; if it is not
   authenticated the failure shows up in the run log).
 - The project has `.taskmaster/tasks/tasks.json` (i.e. it is an initialized Taskmaster project).
@@ -108,6 +108,18 @@ beyond choosing one of four predefined modes:
   `tm next` in priority-based edge cases.
 - Loop runs continue until Taskmaster exits on its own or you press Stop.
 - Stopping kills the `tm` process group; work Claude Code had in flight is interrupted.
+
+## Settings integration
+
+The runner is configured through the Settings area (see [settings.md](settings.md)):
+
+- `tm` path: `TASKMASTER_RUNNER_BIN` env → per-project override → Settings → `tm`
+- Enable/disable, default mode, retention, and stop grace timeout: Settings → Runner
+- Allowed modes and env-var policy: Settings → Security & Access
+- Project root allowlist and confirmation prompts: Settings → General
+- Dependency policy (block/warn/ignore for unfinished dependencies): Settings → Workflow
+- Log tail size and polling intervals: Settings → Preferences
+- Custom environment variables (Claude env + per-project env; `PATH`-like keys always blocked)
 
 ## Future improvements
 
