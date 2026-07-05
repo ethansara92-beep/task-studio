@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils';
 
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { TaskContextMenu } from './task-context-menu';
+import { TaskRunningIndicator } from '@/components/runner/task-running-indicator';
 
 interface TaskLineProps {
    task: Task & { isSubtask?: boolean; parentId?: string };
@@ -77,6 +78,7 @@ export function TaskLine({ task, layoutId = false, showTagBadge = true }: TaskLi
                      {task.title}
                   </span>
                </span>
+               <TaskRunningIndicator taskId={task.id} className="ml-1.5" />
                {subtaskCount.total > 0 && (
                   <SubtaskProgress
                      completed={subtaskCount.completed}
