@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { runNextRequestSchema } from '@/types/runner';
 import { parseRunnerBody, runnerFailure, runnerSuccess } from '@/lib/runner/api-helpers';
 import { resolveProjectRoot } from '@/lib/runner/runner-validation';
+import { assertRunAllowed, getRunnerRuntimeConfig } from '@/lib/runner/runner-config';
 import { findNextTaskId } from '@/lib/runner/next-task';
 import { startRun } from '@/lib/runner/taskmaster-runner';
 
@@ -13,12 +14,14 @@ export async function POST(request: NextRequest) {
          'INVALID_PROJECT_ROOT'
       );
       const root = await resolveProjectRoot(projectRoot);
+      const config = await getRunnerRuntimeConfig(root);
+      assertRunAllowed(config, 'run-next', root);
 
       // The Taskmaster CLI has no non-interactive "start next" command, so the
       // next eligible task is resolved server-side from tasks.json and started
       // as a single bounded `tm start <id>` run (see docs/taskmaster-runner.md).
       const taskId = await findNextTaskId(root);
-      const run = await startRun({ projectRoot: root, mode: 'run-next', taskId });
+      const run = await startRun({ projectRoot: root, mode: 'run-next', taskId, config });
       return runnerSuccess({ runId: run.runId, taskId: run.taskId, run }, 201);
    } catch (error) {
       return runnerFailure(error);

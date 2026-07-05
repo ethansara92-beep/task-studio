@@ -15,19 +15,22 @@ import {
    buildRunnerCommand,
    getLockFilePath,
    getRunsDir,
-   getTmBin,
    resolveRunFilePath,
 } from './runner-validation';
+import { RunnerRuntimeConfig, getRunnerRuntimeConfig } from './runner-config';
+import { appendAuditLog } from '@/lib/settings/settings-service';
 
-const GRACEFUL_KILL_TIMEOUT_MS = 5000;
+const DEFAULT_GRACEFUL_KILL_TIMEOUT_MS = 5000;
 const RECENT_RUNS_LIMIT = 20;
-const MAX_LOG_RESPONSE_BYTES = 256 * 1024; // 256KB tail per request
+const MAX_LOG_RESPONSE_BYTES = 2 * 1024 * 1024; // absolute 2MB ceiling per request
 
 interface ActiveRun {
    record: RunRecord;
    child: ChildProcess | null;
    logStream: WriteStream | null;
    cancelRequested: boolean;
+   stopGraceTimeoutMs: number;
+   auditEnabled: boolean;
 }
 
 /**
@@ -64,9 +67,26 @@ async function writeRunMetadata(projectRoot: string, record: RunRecord): Promise
    // Persist projectRoot on disk for future tooling, but keep it out of the
    // in-memory record that gets returned to the browser.
    const persisted = { ...record, projectRoot };
-   const tmpPath = `${metaPath}.tmp`;
+   const tmpPath = `${metaPath}.${crypto.randomBytes(4).toString('hex')}.tmp`;
    await fs.writeFile(tmpPath, JSON.stringify(persisted, null, 2), 'utf-8');
    await fs.rename(tmpPath, metaPath);
+}
+
+/**
+ * Per-run serialization of persistence. A fast-exiting process makes
+ * finalizeRun (from 'close') race with startRun's own post-spawn writes;
+ * chaining them guarantees ordering and lets startRun observe that the
+ * run already finished.
+ */
+const runPersistChains = new Map<string, Promise<void>>();
+function withRunPersistLock(runId: string, fn: () => Promise<void>): Promise<void> {
+   const prev = runPersistChains.get(runId) ?? Promise.resolve();
+   const next = prev.then(fn, fn);
+   runPersistChains.set(
+      runId,
+      next.catch(() => {})
+   );
+   return next;
 }
 
 async function writeLockFile(projectRoot: string, record: RunRecord): Promise<void> {
@@ -121,6 +141,8 @@ export interface StartRunOptions {
    projectRoot: string;
    mode: RunnerMode;
    taskId?: string | null;
+   /** Pre-resolved runtime config; loaded from settings when omitted. */
+   config?: RunnerRuntimeConfig;
 }
 
 /**
@@ -130,8 +152,9 @@ export interface StartRunOptions {
  */
 export async function startRun(options: StartRunOptions): Promise<RunRecord> {
    const { projectRoot, mode, taskId = null } = options;
+   const config = options.config ?? (await getRunnerRuntimeConfig(projectRoot));
 
-   const command = buildRunnerCommand(mode, taskId);
+   const command = buildRunnerCommand(mode, taskId, config.tmBin);
 
    // Reserve the per-project slot synchronously (before any await) so two
    // concurrent requests cannot both pass the busy check.
@@ -159,7 +182,14 @@ export async function startRun(options: StartRunOptions): Promise<RunRecord> {
       pid: null,
    };
 
-   const activeRun: ActiveRun = { record, child: null, logStream: null, cancelRequested: false };
+   const activeRun: ActiveRun = {
+      record,
+      child: null,
+      logStream: null,
+      cancelRequested: false,
+      stopGraceTimeoutMs: config.stopGraceTimeoutMs,
+      auditEnabled: config.auditEnabled,
+   };
    activeRuns.set(projectRoot, activeRun);
 
    try {
@@ -197,7 +227,7 @@ export async function startRun(options: StartRunOptions): Promise<RunRecord> {
          // Own process group on POSIX so stop() can kill tm AND the Claude
          // Code process it spawns.
          detached: process.platform !== 'win32',
-         env: { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1' },
+         env: { ...process.env, ...config.extraEnv, FORCE_COLOR: '0', NO_COLOR: '1' },
       });
       activeRun.child = child;
 
@@ -222,8 +252,16 @@ export async function startRun(options: StartRunOptions): Promise<RunRecord> {
          void finalizeRun(projectRoot, activeRun, code, signal);
       });
 
-      await writeLockFile(projectRoot, record);
-      await writeRunMetadata(projectRoot, record);
+      await withRunPersistLock(record.runId, async () => {
+         // If the process already exited, finalizeRun has cleaned up - do not
+         // resurrect the lock file or overwrite the final metadata.
+         if (activeRuns.get(projectRoot) !== activeRun) return;
+         await writeLockFile(projectRoot, record);
+         await writeRunMetadata(projectRoot, record);
+      });
+      void appendAuditLog('runner.started', `Run ${record.runId} started (mode: ${mode})`, {
+         enabled: config.auditEnabled,
+      });
 
       return { ...record };
    } catch (error) {
@@ -236,9 +274,9 @@ export async function startRun(options: StartRunOptions): Promise<RunRecord> {
 
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
          record.error =
-            `Taskmaster CLI ('${getTmBin()}') was not found on PATH. ` +
-            'Install Taskmaster and make sure the tm command works in a terminal ' +
-            '(or set TASKMASTER_RUNNER_BIN to its full path).';
+            `Taskmaster CLI ('${config.tmBin}') was not found. ` +
+            'Install Taskmaster and make sure the command works in a terminal, ' +
+            'or set its path in Settings → Taskmaster & Claude Code.';
          await writeRunMetadata(projectRoot, record).catch(() => {});
          throw new RunnerError('TM_NOT_FOUND', record.error, 500);
       }
@@ -281,10 +319,64 @@ async function finalizeRun(
 
    // Persist the final state BEFORE releasing the in-memory slot, so a
    // concurrent status read never sees a stale 'running' metadata file
-   // without a matching active run.
-   await writeRunMetadata(projectRoot, record).catch(() => {});
-   await removeLockFile(projectRoot);
-   activeRuns.delete(projectRoot);
+   // without a matching active run. Serialized against startRun's own
+   // writes for fast-exiting processes.
+   await withRunPersistLock(record.runId, async () => {
+      await writeRunMetadata(projectRoot, record).catch(() => {});
+      await removeLockFile(projectRoot);
+      activeRuns.delete(projectRoot);
+   });
+   runPersistChains.delete(record.runId);
+
+   void appendAuditLog(
+      'runner.stopped',
+      `Run ${record.runId} finished with status '${record.status}'`,
+      { enabled: activeRun.auditEnabled }
+   );
+   void pruneRunHistory(projectRoot).catch(() => {});
+}
+
+/**
+ * Applies retention settings: keeps only the newest N run records and
+ * deletes log/metadata files older than the retention window. Never touches
+ * the active run.
+ */
+export async function pruneRunHistory(projectRoot: string): Promise<void> {
+   const { historyLimit, logRetentionDays } = await getRunnerRuntimeConfig(projectRoot);
+   const runsDir = getRunsDir(projectRoot);
+   const active = getActiveRun(projectRoot);
+
+   let entries: string[];
+   try {
+      entries = await fs.readdir(runsDir);
+   } catch {
+      return;
+   }
+
+   // Run IDs sort chronologically (ISO-timestamp prefix), newest last.
+   const runIds = entries
+      .filter((name) => name.endsWith('.json'))
+      .map((name) => name.replace(/\.json$/, ''))
+      .sort();
+
+   const cutoff = Date.now() - logRetentionDays * 24 * 60 * 60 * 1000;
+   const keep = new Set(runIds.slice(-historyLimit));
+
+   for (const runId of runIds) {
+      if (active?.runId === runId) continue;
+      const tooMany = !keep.has(runId);
+      // The timestamp prefix (YYYY-MM-DDTHH-MM-SS) is parseable after
+      // restoring the time separators.
+      const stampMatch = runId.match(/^(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})/);
+      const startedMs = stampMatch
+         ? Date.parse(`${stampMatch[1]}T${stampMatch[2]}:${stampMatch[3]}:${stampMatch[4]}Z`)
+         : NaN;
+      const tooOld = Number.isFinite(startedMs) && startedMs < cutoff;
+      if (tooMany || tooOld) {
+         await fs.unlink(path.join(runsDir, `${runId}.json`)).catch(() => {});
+         await fs.unlink(path.join(runsDir, `${runId}.log`)).catch(() => {});
+      }
+   }
 }
 
 /**
@@ -306,7 +398,7 @@ export async function stopRun(projectRoot: string, runId: string): Promise<RunRe
          if (activeRuns.get(projectRoot) === activeRun) {
             killRunProcess(child, 'SIGKILL');
          }
-      }, GRACEFUL_KILL_TIMEOUT_MS);
+      }, activeRun.stopGraceTimeoutMs || DEFAULT_GRACEFUL_KILL_TIMEOUT_MS);
       killTimer.unref();
    }
 

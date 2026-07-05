@@ -6,9 +6,7 @@ import * as React from 'react';
 import { HelpButton } from '@/components/layout/sidebar/help-button';
 import { NavTags } from '@/components/layout/sidebar/nav-tags';
 import { NavWorkspace } from '@/components/layout/sidebar/nav-workspace';
-import { NavAccount } from '@/components/layout/sidebar/nav-account';
-import { NavFeatures } from '@/components/layout/sidebar/nav-features';
-import { NavTeamsSettings } from '@/components/layout/sidebar/nav-teams-settings';
+import { NavSettings } from '@/components/layout/sidebar/nav-settings';
 import { OrgSwitcher } from '@/components/layout/sidebar/org-switcher';
 import { Button } from '@/components/ui/button';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader } from '@/components/ui/sidebar';
@@ -24,11 +22,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
          <SidebarHeader>{isSettings ? <BackToApp /> : <OrgSwitcher />}</SidebarHeader>
          <SidebarContent>
             {isSettings ? (
-               <>
-                  <NavAccount />
-                  <NavFeatures />
-                  <NavTeamsSettings />
-               </>
+               <NavSettings />
             ) : (
                <>
                   <NavWorkspace />

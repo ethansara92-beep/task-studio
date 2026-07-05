@@ -1,6 +1,8 @@
 import { AppSidebar } from '@/components/layout/sidebar/app-sidebar';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { CreateTaskModalProvider } from '@/components/common/tasks/create-task-modal-provider';
+import { RunnerNotifications } from '@/components/runner/runner-notifications';
+import { SettingsEffects } from '@/components/common/settings/settings-effects';
 import { TaskViewOverlay } from '@/components/task-view-overlay';
 import { UnifiedHeader } from '@/components/layout/headers/unified-header';
 import { cn } from '@/lib/utils';
@@ -18,6 +20,8 @@ export default function MainLayout({ children, headersNumber = 2 }: MainLayoutPr
    return (
       <SidebarProvider>
          <CreateTaskModalProvider />
+         <RunnerNotifications />
+         <SettingsEffects />
          <AppSidebar />
          <div className="h-svh overflow-hidden lg:p-2 w-full">
             <div className="lg:border lg:rounded-md overflow-hidden flex flex-col items-center justify-start bg-container h-full w-full relative">
