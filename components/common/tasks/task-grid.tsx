@@ -14,6 +14,7 @@ import { StatusSelector } from './status-selector';
 import { useTaskViewUrl } from '@/hooks/use-task-view-url';
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { TaskContextMenu } from './task-context-menu';
+import { TaskRunningIndicator } from '@/components/runner/task-running-indicator';
 
 export const TaskDragType = 'TASK';
 type TaskGridProps = {
@@ -138,6 +139,7 @@ export function TaskGrid({ task, showTagBadge = true }: TaskGridProps) {
                      <span className="text-xs text-muted-foreground font-medium">
                         {task.identifier}
                      </span>
+                     <TaskRunningIndicator taskId={task.id} />
                   </div>
                   <StatusSelector status={task.status} taskId={task.id} tagName={task.tag?.id} />
                </div>

@@ -72,6 +72,16 @@ Click any task to see:
 - Priority and status
 - Quick actions for task management
 
+### Taskmaster Runner
+
+Run Taskmaster + Claude Code straight from the UI — no webhook or external service needed.
+From the task detail view you can run the open task (`tm start <id>`), run the next eligible
+task, or start a (sandboxed) auto-loop, with live status, run history, and streaming-ish logs.
+Logs and run metadata are stored under `.taskmaster/runs/`.
+
+See [docs/taskmaster-runner.md](docs/taskmaster-runner.md) for requirements (Taskmaster CLI +
+authenticated Claude Code), the safety model, and known limitations.
+
 ### Real-time Sync
 
 The UI uses WebSocket and file watchers to detect changes to:
@@ -100,6 +110,7 @@ pnpm build        # Build for production
 pnpm start        # Start production server
 pnpm lint         # Run ESLint
 pnpm typecheck    # Run TypeScript type checking
+pnpm test         # Run unit tests (vitest)
 ```
 
 ## Roadmap

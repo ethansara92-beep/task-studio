@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { useTaskViewUrl } from '@/hooks/use-task-view-url';
 import { extractTaskId } from '@/lib/task-id-utils';
+import { RunnerPanel } from '@/components/runner/runner-panel';
 import { useAllTasks } from '@/hooks/use-all-tasks';
 import { useCurrentTagWithTasks } from '@/hooks/use-taskmaster-queries';
 import { formatTaskId, formatSubtaskId, formatTaskIdentifier } from '@/lib/format-task-id';
@@ -298,6 +299,9 @@ export function TaskDetailsView({ task }: TaskDetailsViewProps) {
                <p className="text-muted-foreground mb-8">
                   {task.description || 'Add description...'}
                </p>
+
+               {/* Taskmaster Runner */}
+               <RunnerPanel taskId={extractTaskId(taskId)} />
 
                {/* Details Section */}
                {task.details && (
