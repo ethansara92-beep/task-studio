@@ -100,6 +100,12 @@ export interface Diagnostics {
    projectRoot: string;
    settingsFilePath: string;
    tasksFilePath: string;
+   tasksFile: { exists: boolean; mtimeMs: number | null; sizeBytes: number | null };
+   taskCache: {
+      cachedTaskCount: number | null;
+      cachedMtimeMs: number | null;
+      inSync: boolean | null;
+   };
    runsDirPath: string;
    taskmaster: { path: string; ok: boolean; version?: string; error?: string };
    claude: { path: string; ok: boolean; version?: string; error?: string };

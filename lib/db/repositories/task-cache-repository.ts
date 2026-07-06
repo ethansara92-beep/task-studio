@@ -3,6 +3,11 @@ import path from 'node:path';
 import { promises as fs } from 'node:fs';
 import type { DatabaseSync } from 'node:sqlite';
 import { withTransaction } from '@/lib/db';
+import {
+   TagContexts,
+   TaskLoadError,
+   extractTagContexts,
+} from '@/lib/taskmaster/parse-taskmaster-tasks';
 import type { TaskmasterTask } from '@/types/taskmaster';
 
 /**
@@ -105,25 +110,6 @@ function flattenTaskTree(
    return result;
 }
 
-/** Extracts { tag -> tasks[] } from a tagged or legacy-flat tasks.json document. */
-function extractTagContexts(parsed: unknown): Record<string, TaskmasterTask[]> {
-   if (parsed == null || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
-   const doc = parsed as Record<string, unknown>;
-
-   // Legacy flat format: { "tasks": [...] }
-   if (Array.isArray(doc.tasks)) {
-      return { master: doc.tasks as TaskmasterTask[] };
-   }
-
-   const contexts: Record<string, TaskmasterTask[]> = {};
-   for (const [tag, value] of Object.entries(doc)) {
-      if (value != null && typeof value === 'object' && Array.isArray((value as any).tasks)) {
-         contexts[tag] = (value as { tasks: TaskmasterTask[] }).tasks;
-      }
-   }
-   return contexts;
-}
-
 export interface RefreshResult {
    refreshed: boolean;
    taskCount: number;
@@ -167,7 +153,21 @@ export async function refreshTaskCache(
       };
    }
 
-   const contexts = extractTagContexts(parsed);
+   let contexts: TagContexts;
+   try {
+      contexts = extractTagContexts(parsed);
+   } catch (error) {
+      // Unknown document shape: keep the previous cache and surface the error.
+      return {
+         refreshed: false,
+         taskCount: countCachedTasks(db, resolvedRoot),
+         sourceMtimeMs: null,
+         error:
+            error instanceof TaskLoadError
+               ? error.message
+               : 'tasks.json does not match a known Taskmaster format',
+      };
+   }
    const now = new Date().toISOString();
    const relativeSource = path.posix.join('.taskmaster', 'tasks', 'tasks.json');
 
@@ -182,8 +182,8 @@ export async function refreshTaskCache(
    let taskCount = 0;
    withTransaction(db, () => {
       db.prepare('DELETE FROM task_cache WHERE project_root = ?').run(resolvedRoot);
-      for (const [tag, tasks] of Object.entries(contexts)) {
-         for (const { fullId, task } of flattenTaskTree(tasks)) {
+      for (const [tag, context] of Object.entries(contexts)) {
+         for (const { fullId, task } of flattenTaskTree(context.tasks)) {
             insert.run(
                crypto.randomUUID(),
                resolvedRoot,

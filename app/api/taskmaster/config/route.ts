@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server';
+import path from 'path';
 import { promises as fs } from 'fs';
-import { TaskmasterPaths } from '@/lib/taskmaster-paths';
+import { resolveActiveProjectRoot } from '@/lib/taskmaster/project-root';
 
 export async function GET() {
    try {
-      const configPath = TaskmasterPaths.config();
+      const projectRoot = await resolveActiveProjectRoot();
+      const configPath = path.join(projectRoot, '.taskmaster', 'config.json');
 
       try {
          const configData = await fs.readFile(configPath, 'utf-8');

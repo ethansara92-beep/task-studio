@@ -10,10 +10,11 @@ import {
    SidebarMenuButton,
    SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { teams } from '@/mock-data/teams';
+import { useTeams } from '@/hooks/use-teams';
 import { Button } from '@/components/ui/button';
 
 export function NavTeamsSettings() {
+   const { teams } = useTeams();
    const joinedTeams = teams.filter((t) => t.joined);
    return (
       <SidebarGroup>

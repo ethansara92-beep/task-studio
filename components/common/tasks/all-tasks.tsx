@@ -17,6 +17,8 @@ import { formatTaskIdentifier } from '@/lib/format-task-id';
 import { GroupTasks } from './group-tasks';
 import { TaskWithSubtasks } from './task-with-subtasks';
 import { CustomDragLayer } from './task-grid';
+import { TaskSourceBanner } from './task-source-banner';
+import { TaskLoadErrorState, TasksEmptyState } from './task-load-error';
 import { cn } from '@/lib/utils';
 import { Task } from '@/mock-data/tasks';
 
@@ -164,30 +166,43 @@ export default function AllTasks({
 
    if (error) {
       return (
-         <div className="w-full h-full flex items-center justify-center text-red-500">
-            Error loading tasks: {error instanceof Error ? error.message : 'Unknown error'}
+         <div className="w-full h-full flex flex-col">
+            <TaskSourceBanner />
+            <TaskLoadErrorState error={error} />
+         </div>
+      );
+   }
+
+   if (tasks.length === 0 && !isSearching && !isFiltering && taskFilter !== 'active') {
+      return (
+         <div className="w-full h-full flex flex-col">
+            <TaskSourceBanner />
+            <TasksEmptyState />
          </div>
       );
    }
 
    return (
-      <div className={cn('w-full h-full', isViewTypeBoard && 'overflow-x-auto')}>
-         {isSearching ? (
-            <SearchTasksView tasks={tasks} showAllTags={showAllTags} />
-         ) : isFiltering ? (
-            <FilteredTasksView
-               isViewTypeBoard={isViewTypeBoard}
-               tasks={tasks}
-               showAllTags={showAllTags}
-            />
-         ) : (
-            <GroupTasksListView
-               isViewTypeBoard={isViewTypeBoard}
-               tasks={tasks}
-               showAllTags={showAllTags}
-               metadata={metadata}
-            />
-         )}
+      <div className="w-full h-full flex flex-col">
+         <TaskSourceBanner />
+         <div className={cn('w-full flex-1 min-h-0', isViewTypeBoard && 'overflow-x-auto')}>
+            {isSearching ? (
+               <SearchTasksView tasks={tasks} showAllTags={showAllTags} />
+            ) : isFiltering ? (
+               <FilteredTasksView
+                  isViewTypeBoard={isViewTypeBoard}
+                  tasks={tasks}
+                  showAllTags={showAllTags}
+               />
+            ) : (
+               <GroupTasksListView
+                  isViewTypeBoard={isViewTypeBoard}
+                  tasks={tasks}
+                  showAllTags={showAllTags}
+                  metadata={metadata}
+               />
+            )}
+         </div>
       </div>
    );
 }

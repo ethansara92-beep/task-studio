@@ -8,7 +8,7 @@ import {
 } from '@/lib/taskmaster-service';
 import { TagContext } from '@/types/taskmaster';
 import { UpdateTaskResponse, updateTaskSchema } from '@/types/taskmaster-api';
-import { TaskmasterPaths } from '@/lib/taskmaster-paths';
+import { getTasksFilePath, resolveActiveProjectRoot } from '@/lib/taskmaster/project-root';
 import { writeJsonFile } from '@/utils/filesystem';
 
 export async function POST(request: NextRequest) {
@@ -30,8 +30,9 @@ export async function POST(request: NextRequest) {
 
       const { tag, taskId, updates } = validationResult.data;
 
-      // Read current tasks file
-      const tasksPath = TaskmasterPaths.tasks();
+      // Read current tasks file from the same root the task views load from,
+      // so this safe write path never touches a different project's file.
+      const tasksPath = getTasksFilePath(await resolveActiveProjectRoot());
 
       let tasksData: Record<string, TagContext>;
       try {

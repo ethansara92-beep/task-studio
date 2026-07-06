@@ -16,7 +16,7 @@ import { useFilterStore } from '@/store/filter-store';
 import { status as allStatus } from '@/mock-data/status';
 import { priorities } from '@/mock-data/priorities';
 import { labels } from '@/mock-data/labels';
-import { tags } from '@/mock-data/tags';
+import { useTagsFromData } from '@/hooks/use-tags-from-data';
 import { users } from '@/mock-data/users';
 import {
    CheckIcon,
@@ -38,6 +38,7 @@ type FilterType = 'status' | 'assignee' | 'priority' | 'labels' | 'tag';
 export function Filter() {
    const [open, setOpen] = useState<boolean>(false);
    const [activeFilter, setActiveFilter] = useState<FilterType | null>(null);
+   const { tags } = useTagsFromData();
 
    const { filters, toggleFilter, clearFilters, getActiveFiltersCount } = useFilterStore();
 

@@ -1,119 +1,46 @@
-import { NextResponse } from 'next/server';
-import path from 'path';
-import { readJsonFile } from '@/utils/filesystem';
-import fs from 'fs/promises';
-import { TaskmasterPaths } from '@/lib/taskmaster-paths';
+import { NextRequest, NextResponse } from 'next/server';
+import { loadTaskmasterTasks } from '@/lib/taskmaster/load-tasks';
+import { mergeComplexityIntoTasks } from '@/lib/taskmaster/complexity-reports';
+import { taskLoadErrorResponse } from '@/lib/taskmaster/api-helpers';
 
-interface ComplexityAnalysis {
-   taskId: number;
-   taskTitle: string;
-   complexityScore: number;
-   recommendedSubtasks: number;
-   expansionPrompt: string;
-   reasoning: string;
-}
-
-interface ComplexityReport {
-   meta: {
-      generatedAt: string;
-      tasksAnalyzed: number;
-      totalTasks: number;
-      analysisCount: number;
-      thresholdScore: number;
-      projectName: string;
-      usedResearch: boolean;
-   };
-   complexityAnalysis: ComplexityAnalysis[];
-}
-
-export async function GET() {
+/**
+ * GET /api/taskmaster/tasks?projectRoot=...
+ *
+ * Returns the full tagged task document read from the active project's
+ * `.taskmaster/tasks/tasks.json` (canonical source). Errors are returned with
+ * machine-readable codes - there is no mock/demo fallback.
+ */
+export async function GET(request: NextRequest) {
    try {
-      // Read tasks.json from the .taskmaster directory
-      const tasksPath = TaskmasterPaths.tasks();
+      const requestedRoot = request.nextUrl.searchParams.get('projectRoot');
+      const loaded = await loadTaskmasterTasks(requestedRoot);
 
-      const result = await readJsonFile(tasksPath);
-
-      if (!result.success) {
-         return NextResponse.json(
-            {
-               success: false,
-               error: result.error || 'Failed to read tasks.json',
-               path: tasksPath,
-               timestamp: new Date().toISOString(),
-            },
-            { status: 404 }
-         );
+      const data: Record<string, { tasks: unknown[]; metadata: unknown }> = {};
+      for (const [tagName, context] of Object.entries(loaded.tags)) {
+         data[tagName] = {
+            tasks: await mergeComplexityIntoTasks(
+               loaded.source.projectRoot,
+               tagName,
+               context.tasks
+            ),
+            metadata: context.metadata,
+         };
       }
 
-      // Read all complexity reports
-      const reportsPath = TaskmasterPaths.reports();
-      const complexityReports: Record<string, Record<number, ComplexityAnalysis>> = {};
-
-      try {
-         const files = await fs.readdir(reportsPath);
-         const reportFiles = files.filter(
-            (file) => file.startsWith('task-complexity-report_') && file.endsWith('.json')
-         );
-
-         // Load each complexity report
-         for (const file of reportFiles) {
-            const tagName = file.replace('task-complexity-report_', '').replace('.json', '');
-            const reportPath = path.join(reportsPath, file);
-            const reportResult = await readJsonFile(reportPath);
-
-            if (reportResult.success && reportResult.data) {
-               const report = reportResult.data as ComplexityReport;
-               complexityReports[tagName] = {};
-
-               // Index complexity analysis by task ID for easy lookup
-               report.complexityAnalysis.forEach((analysis) => {
-                  complexityReports[tagName][analysis.taskId] = analysis;
-               });
-            }
-         }
-      } catch {
-         // Reports directory doesn't exist or error reading reports
-      }
-
-      // Merge complexity data into tasks
-      const tasksData = result.data as Record<string, any>;
-      const enrichedData = { ...tasksData };
-
-      // Add complexity data to each task in each tag
-      Object.keys(enrichedData).forEach((tagName) => {
-         if (enrichedData[tagName]?.tasks && complexityReports[tagName]) {
-            enrichedData[tagName].tasks = enrichedData[tagName].tasks.map((task: any) => {
-               const complexityAnalysis = complexityReports[tagName][task.id];
-               if (complexityAnalysis) {
-                  return {
-                     ...task,
-                     complexity: {
-                        score: complexityAnalysis.complexityScore,
-                        expansionPrompt: complexityAnalysis.expansionPrompt,
-                        reasoning: complexityAnalysis.reasoning,
-                        recommendedSubtasks: complexityAnalysis.recommendedSubtasks,
-                     },
-                  };
-               }
-               return task;
-            });
-         }
-      });
-
-      return NextResponse.json({
-         success: true,
-         data: enrichedData,
-         timestamp: new Date().toISOString(),
-      });
-   } catch (error) {
-      console.error('Error in tasks route:', error);
       return NextResponse.json(
          {
-            success: false,
-            error: error instanceof Error ? error.message : 'Internal server error',
+            success: true,
+            data,
+            source: loaded.source,
             timestamp: new Date().toISOString(),
          },
-         { status: 500 }
+         {
+            headers: {
+               'Cache-Control': 'no-store, no-cache, must-revalidate',
+            },
+         }
       );
+   } catch (error) {
+      return taskLoadErrorResponse(error);
    }
 }
