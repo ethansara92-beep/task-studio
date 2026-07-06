@@ -1,9 +1,9 @@
-import { groupTasksByStatus, Task } from '@/mock-data/tasks';
-import { LabelInterface } from '@/mock-data/labels';
-import { Priority } from '@/mock-data/priorities';
-import { Tag } from '@/mock-data/tags';
-import { Status } from '@/mock-data/status';
-import { User } from '@/mock-data/users';
+import { groupTasksByStatus, Task } from '@/ui-data/tasks';
+import { LabelInterface } from '@/ui-data/labels';
+import { Priority } from '@/ui-data/priorities';
+import { Tag } from '@/ui-data/tags';
+import { Status } from '@/ui-data/status';
+import { User } from '@/ui-data/users';
 import { create } from 'zustand';
 
 interface FilterOptions {

@@ -10,11 +10,11 @@ import {
    CommandList,
 } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Tag } from '@/mock-data/tags';
+import { Tag } from '@/ui-data/tags';
 import { CheckIcon, GitBranch } from 'lucide-react';
 import { useEffect, useId, useState } from 'react';
 import { useTags } from '@/hooks/use-taskmaster-queries';
-import { createTagFromData } from '@/mock-data/tags';
+import { createTagFromData } from '@/ui-data/tags';
 
 interface TagSelectorProps {
    tag: Tag | undefined;

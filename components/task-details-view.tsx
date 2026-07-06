@@ -4,7 +4,7 @@ import * as React from 'react';
 import { TaskmasterTask } from '@/types/taskmaster';
 import { TaskWithTag } from '@/hooks/use-all-tasks';
 import { TASKMASTER_STATUS_MAP } from '@/lib/taskmaster-constants';
-import { priorities } from '@/mock-data/priorities';
+import { priorities } from '@/ui-data/priorities';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -14,9 +14,9 @@ import { PrioritySelector } from '@/components/common/tasks/priority-selector';
 import { AssigneeSelector } from '@/components/common/tasks/assignee-selector';
 import { EstimateSelector } from '@/components/common/tasks/estimate-selector';
 import { countSubtasks } from '@/lib/subtask-utils';
-import { Status } from '@/mock-data/status';
-import { Priority } from '@/mock-data/priorities';
-import { User } from '@/mock-data/users';
+import { Status } from '@/ui-data/status';
+import { Priority } from '@/ui-data/priorities';
+import { User } from '@/ui-data/users';
 import {
    Plus,
    ChevronRight,

@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useTasksStore } from '@/store/tasks-store';
-import { Status } from '@/mock-data/status';
+import { Status } from '@/ui-data/status';
 import { CheckIcon } from 'lucide-react';
 import { useEffect, useId, useState } from 'react';
 import { TASKMASTER_STATUSES } from '@/lib/taskmaster-constants';

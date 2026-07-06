@@ -6,11 +6,11 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { RiEditLine } from '@remixicon/react';
 import { useState, useEffect, useCallback } from 'react';
-import { Task } from '@/mock-data/tasks';
-import { priorities } from '@/mock-data/priorities';
-import { status } from '@/mock-data/status';
+import { Task } from '@/ui-data/tasks';
+import { priorities } from '@/ui-data/priorities';
+import { status } from '@/ui-data/status';
 import { useTasksStore } from '@/store/tasks-store';
-import { users } from '@/mock-data/users';
+import { users } from '@/ui-data/users';
 import { useCreateTaskStore } from '@/store/create-task-store';
 import { toast } from 'sonner';
 import { v4 as uuidv4 } from 'uuid';
@@ -18,10 +18,10 @@ import { StatusSelector } from './status-selector';
 import { PrioritySelector } from './priority-selector';
 import { AssigneeSelector } from './assignee-selector';
 import { TagSelector } from './tag-selector';
-import { ranks } from '@/mock-data/tasks';
+import { ranks } from '@/ui-data/tasks';
 import { DialogTitle } from '@radix-ui/react-dialog';
 import { useCurrentTag, useTags } from '@/hooks/use-taskmaster-queries';
-import { createTagFromData } from '@/mock-data/tags';
+import { createTagFromData } from '@/ui-data/tags';
 import { usePathname } from 'next/navigation';
 
 export function CreateNewTask() {

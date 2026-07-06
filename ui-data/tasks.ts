@@ -35,9 +35,8 @@ const generateTasksRanks = () => {
 };
 generateTasksRanks();
 
-// Mock tasks data has been removed - the app loads real Taskmaster data from
-// .taskmaster/tasks/tasks.json. Only the Task view-model interface and
-// utility functions remain in use.
+// Task view-model interface and grouping/sorting helpers. Task data itself
+// always comes from .taskmaster/tasks/tasks.json - never from this module.
 
 export function groupTasksByStatus(tasks: Task[]): Record<string, Task[]> {
    return tasks.reduce<Record<string, Task[]>>((acc, task) => {

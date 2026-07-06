@@ -1,4 +1,4 @@
-import { Tag } from '@/mock-data/tags';
+import { Tag } from '@/ui-data/tags';
 import { HealthPopover } from './health-popover';
 import { PrioritySelector } from './priority-selector';
 import { LeadSelector } from './lead-selector';
