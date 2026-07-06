@@ -1,6 +1,6 @@
 'use client';
 
-import { users } from '@/mock-data/users';
+import { users } from '@/ui-data/users';
 import MemberLine from './member-line';
 
 export default function Members() {

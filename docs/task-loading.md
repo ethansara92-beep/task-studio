@@ -18,10 +18,10 @@ Tasks are **always** read from the active project's Taskmaster file:
   read triggers a cache refresh when the file's mtime changed
   (`refreshTaskCacheIfStale`), which rebuilds the project's rows in one
   transaction and removes rows for deleted tasks.
-- There is **no mock/demo task data in runtime paths**. When the file cannot
-  be loaded, the UI shows an explicit error state (see below), never fake
-  tasks. The remaining modules under `mock-data/` hold UI view-model types and
-  static enum metadata (statuses, priorities, nav items), not demo tasks.
+- There is **no mock/demo data in the codebase**. When the file cannot be
+  loaded, the UI shows an explicit error state (see below), never fake tasks.
+  The `ui-data/` directory holds UI view-model types and static enum metadata
+  (statuses, priorities, labels, nav items) - definitions, not data.
 
 ## Project root resolution
 
@@ -133,11 +133,11 @@ watcher follows it.
 
 ## Mock/demo data policy
 
-- Runtime task/tag/team views must load real data; mock fallbacks were
-  removed (`mock-data/tags.ts` no longer exports a demo tag list,
-  `mock-data/teams.ts` no longer exports a static team list, demo cycles were
-  deleted).
-- `mock-data/` retains: view-model interfaces (`Task`, `Tag`, `Team`), static
-  UI enums (`status`, `priorities`, `labels`), the workspace user list, and
-  sidebar nav items. New demo/test fixtures belong in test files, not in
+- There is no `mock-data/` directory and no mock/demo data anywhere in
+  runtime. All task/tag/team views load real data; demo fallbacks (fake tag
+  list, static mock team, demo cycles, random progress values) were removed.
+- `ui-data/` holds runtime UI *definitions*, not data: view-model interfaces
+  (`Task`, `Tag`, `Team`, `User`), static UI enums (`status`, `priorities`,
+  `labels`), the local workspace user, and sidebar nav items.
+- New demo/test fixtures belong in test files (`**/__tests__/`), not in
   runtime modules.

@@ -36,10 +36,10 @@ import {
 } from 'lucide-react';
 import React, { useState } from 'react';
 import { useTasksStore } from '@/store/tasks-store';
-import { status } from '@/mock-data/status';
-import { priorities } from '@/mock-data/priorities';
-import { users } from '@/mock-data/users';
-import { labels } from '@/mock-data/labels';
+import { status } from '@/ui-data/status';
+import { priorities } from '@/ui-data/priorities';
+import { users } from '@/ui-data/users';
+import { labels } from '@/ui-data/labels';
 import { useTagsFromData } from '@/hooks/use-tags-from-data';
 import { toast } from 'sonner';
 

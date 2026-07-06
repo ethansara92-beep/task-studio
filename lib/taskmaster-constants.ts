@@ -1,4 +1,4 @@
-import { Status, ToDoIcon, InProgressIcon, CompletedIcon, PausedIcon } from '@/mock-data/status';
+import { Status, ToDoIcon, InProgressIcon, CompletedIcon, PausedIcon } from '@/ui-data/status';
 
 // Taskmaster status definitions
 export const TASKMASTER_STATUSES: Status[] = [

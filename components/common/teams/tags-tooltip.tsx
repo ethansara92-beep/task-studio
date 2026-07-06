@@ -1,7 +1,7 @@
 'use client';
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Tag } from '@/mock-data/tags';
+import { Tag } from '@/ui-data/tags';
 import { Box, GitBranch } from 'lucide-react';
 
 interface TagsTooltipProps {

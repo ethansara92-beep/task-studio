@@ -13,11 +13,11 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useTasksStore } from '@/store/tasks-store';
 import { useFilterStore } from '@/store/filter-store';
-import { status as allStatus } from '@/mock-data/status';
-import { priorities } from '@/mock-data/priorities';
-import { labels } from '@/mock-data/labels';
+import { status as allStatus } from '@/ui-data/status';
+import { priorities } from '@/ui-data/priorities';
+import { labels } from '@/ui-data/labels';
 import { useTagsFromData } from '@/hooks/use-tags-from-data';
-import { users } from '@/mock-data/users';
+import { users } from '@/ui-data/users';
 import {
    CheckIcon,
    ChevronRight,

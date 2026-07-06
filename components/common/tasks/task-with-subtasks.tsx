@@ -1,6 +1,6 @@
 'use client';
 
-import { Task } from '@/mock-data/tasks';
+import { Task } from '@/ui-data/tasks';
 import { TaskmasterTask } from '@/types/taskmaster';
 import { TaskLine } from './task-line';
 import { TASKMASTER_STATUS_MAP } from '@/lib/taskmaster-constants';
