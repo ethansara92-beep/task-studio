@@ -6,6 +6,7 @@ import {
    fetchState,
    fetchConfig,
    updateTask,
+   unwrapApiResponse,
 } from '@/lib/api/taskmaster';
 import { TaskmasterTask, TaskStatus, TaskPriority } from '@/types/taskmaster';
 import { UpdateTaskRequest } from '@/types/taskmaster-api';
@@ -28,10 +29,7 @@ export function useTags() {
       queryKey: taskmasterKeys.tags(),
       queryFn: async () => {
          const result = await fetchTags();
-         if (!result.success) {
-            throw new Error(result.error || 'Failed to fetch tags');
-         }
-         return result.data;
+         return unwrapApiResponse(result, 'Failed to fetch tags');
       },
    });
 }
@@ -42,10 +40,7 @@ export function useCurrentTag() {
       queryKey: taskmasterKeys.currentTag(),
       queryFn: async () => {
          const result = await fetchCurrentTag();
-         if (!result.success) {
-            throw new Error(result.error || 'Failed to fetch current tag');
-         }
-         return result.data;
+         return unwrapApiResponse(result, 'Failed to fetch current tag');
       },
    });
 }
@@ -56,10 +51,7 @@ export function useTasksByTag(tagName: string) {
       queryKey: taskmasterKeys.tasksByTag(tagName),
       queryFn: async () => {
          const result = await fetchTasksByTag(tagName);
-         if (!result.success) {
-            throw new Error(result.error || 'Failed to fetch tasks');
-         }
-         return result.data;
+         return unwrapApiResponse(result, 'Failed to fetch tasks');
       },
       enabled: !!tagName,
    });
@@ -71,10 +63,7 @@ export function useTaskmasterState() {
       queryKey: taskmasterKeys.state(),
       queryFn: async () => {
          const result = await fetchState();
-         if (!result.success) {
-            throw new Error(result.error || 'Failed to fetch state');
-         }
-         return result.data;
+         return unwrapApiResponse(result, 'Failed to fetch state');
       },
    });
 }
@@ -159,10 +148,7 @@ export function useConfig() {
       queryKey: taskmasterKeys.config(),
       queryFn: async () => {
          const result = await fetchConfig();
-         if (!result.success) {
-            throw new Error(result.error || 'Failed to fetch config');
-         }
-         return result.data;
+         return unwrapApiResponse(result, 'Failed to fetch config');
       },
    });
 }

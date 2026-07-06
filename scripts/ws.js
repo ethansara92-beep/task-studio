@@ -8,7 +8,7 @@ const { createServer } = require('http');
 const path = require('path');
 
 // Inline TaskmasterPaths logic
-function getTaskmasterPath() {
+function getEnvTaskmasterPath() {
    // If TASKMASTER_DIR is set, use it directly (it should already point to .taskmaster)
    if (process.env.TASKMASTER_DIR) {
       return process.env.TASKMASTER_DIR;
@@ -23,25 +23,41 @@ function getTaskmasterPath() {
    return path.join(process.cwd(), '.taskmaster');
 }
 
-const TaskmasterPaths = {
-   tasks: () => path.join(getTaskmasterPath(), 'tasks', 'tasks.json'),
-   state: () => path.join(getTaskmasterPath(), 'state.json'),
-   config: () => path.join(getTaskmasterPath(), 'config.json'),
-   reports: () => path.join(getTaskmasterPath(), 'reports'),
-};
+// Mirrors the task loader's resolution: Settings → General → Default project
+// root (read from the settings JSON mirror), falling back to the
+// env-configured project.
+function resolveWatchedTaskmasterDir() {
+   const envTaskmasterDir = path.resolve(getEnvTaskmasterPath());
+   try {
+      const settingsRaw = readFileSync(
+         path.join(envTaskmasterDir, 'task-studio-settings.json'),
+         'utf-8'
+      );
+      const settings = JSON.parse(settingsRaw);
+      const defaultRoot = settings && settings.general && settings.general.defaultProjectRoot;
+      if (typeof defaultRoot === 'string' && defaultRoot.trim() !== '') {
+         return path.join(path.resolve(defaultRoot), '.taskmaster');
+      }
+   } catch {
+      // No settings file (or unreadable): watch the env-configured project.
+   }
+   return envTaskmasterDir;
+}
 
-const port = 5566;
+const taskmasterDir = resolveWatchedTaskmasterDir();
+const tasksPath = path.join(taskmasterDir, 'tasks', 'tasks.json');
+const statePath = path.join(taskmasterDir, 'state.json');
+const configPath = path.join(taskmasterDir, 'config.json');
+
+const port = process.env.NEXT_PUBLIC_WS_PORT ? parseInt(process.env.NEXT_PUBLIC_WS_PORT) : 5566;
 const server = createServer();
 const wss = new WebSocketServer({ server });
 
+console.log(`Watching Taskmaster files in ${taskmasterDir}`);
+
 // Watch the .taskmaster directory
 const watcher = watch(
-   [
-      TaskmasterPaths.tasks(),
-      TaskmasterPaths.state(),
-      TaskmasterPaths.config(),
-      path.join(TaskmasterPaths.reports(), '**/*.json'),
-   ],
+   [tasksPath, statePath, configPath, path.join(taskmasterDir, 'reports', '**/*.json')],
    {
       persistent: true,
       ignoreInitial: true,
@@ -51,8 +67,18 @@ const watcher = watch(
 // Debounce timer to handle rapid file changes
 let debounceTimer = null;
 
-// Broadcast changes to all connected clients
-watcher.on('change', (filepath) => {
+function broadcast(message) {
+   wss.clients.forEach((client) => {
+      if (client.readyState === 1) {
+         // WebSocket.OPEN
+         client.send(message);
+      }
+   });
+}
+
+// Broadcast changes to all connected clients ('add' covers files created
+// after startup, e.g. a fresh `task-master init`).
+function handleFileEvent(filepath) {
    // Clear existing timer
    if (debounceTimer) {
       clearTimeout(debounceTimer);
@@ -74,28 +100,38 @@ watcher.on('change', (filepath) => {
          try {
             parsedContent = JSON.parse(fileContent);
          } catch (parseError) {
+            // Likely a partial write; the next change event re-reads it.
             console.error('Invalid JSON in file, skipping broadcast:', parseError);
             return;
          }
 
-         const message = JSON.stringify({
-            type: 'file-change',
-            path: filepath,
-            content: parsedContent,
-            timestamp: new Date().toISOString(),
-         });
-
-         // Broadcast to all connected clients
-         wss.clients.forEach((client) => {
-            if (client.readyState === 1) {
-               // WebSocket.OPEN
-               client.send(message);
-            }
-         });
+         broadcast(
+            JSON.stringify({
+               type: 'file-change',
+               path: filepath,
+               content: parsedContent,
+               timestamp: new Date().toISOString(),
+            })
+         );
       } catch (error) {
          console.error('Error reading file:', error);
       }
    }, 100); // 100ms debounce
+}
+
+watcher.on('change', handleFileEvent);
+watcher.on('add', handleFileEvent);
+watcher.on('unlink', (filepath) => {
+   // Deleted file: tell clients to refetch so the UI shows the real
+   // (missing-file) state instead of stale data.
+   broadcast(
+      JSON.stringify({
+         type: 'file-change',
+         path: filepath,
+         deleted: true,
+         timestamp: new Date().toISOString(),
+      })
+   );
 });
 
 wss.on('connection', (ws) => {
@@ -103,10 +139,6 @@ wss.on('connection', (ws) => {
 
    // Send initial data
    try {
-      const tasksPath = TaskmasterPaths.tasks();
-      const statePath = TaskmasterPaths.state();
-      const configPath = TaskmasterPaths.config();
-
       // Send tasks if file exists
       try {
          const tasks = JSON.parse(readFileSync(tasksPath, 'utf-8'));

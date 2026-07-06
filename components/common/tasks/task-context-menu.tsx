@@ -40,7 +40,7 @@ import { status } from '@/mock-data/status';
 import { priorities } from '@/mock-data/priorities';
 import { users } from '@/mock-data/users';
 import { labels } from '@/mock-data/labels';
-import { tags } from '@/mock-data/tags';
+import { useTagsFromData } from '@/hooks/use-tags-from-data';
 import { toast } from 'sonner';
 
 interface TaskContextMenuProps {
@@ -50,6 +50,7 @@ interface TaskContextMenuProps {
 export function TaskContextMenu({ taskId }: TaskContextMenuProps) {
    const [isSubscribed, setIsSubscribed] = useState(false);
    const [isFavorite, setIsFavorite] = useState(false);
+   const { tags } = useTagsFromData();
 
    const {
       updateTaskStatus,

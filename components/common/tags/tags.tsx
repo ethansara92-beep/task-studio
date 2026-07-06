@@ -34,8 +34,8 @@ export default function Tags() {
             cancelled: tagTasks.filter((t) => t.status === 'cancelled').length,
          };
 
-         // Create tag with real status
-         const tagData = createTagFromData(tag.name, tag.taskCount, tag.metadata, index);
+         // Create tag with real status derived from actual task counts
+         const tagData = createTagFromData(tag.name, tag.taskCount, tag.metadata, index, statusCounts);
 
          // Calculate health based on task progress
          const getTagHealth = () => {

@@ -1,29 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import path from 'path';
-import { readJsonFile } from '@/utils/filesystem';
-import { TaskmasterPaths, getTaskmasterPath } from '@/lib/taskmaster-paths';
-
-interface ComplexityAnalysis {
-   taskId: number;
-   taskTitle: string;
-   complexityScore: number;
-   recommendedSubtasks: number;
-   expansionPrompt: string;
-   reasoning: string;
-}
-
-interface ComplexityReport {
-   meta: {
-      generatedAt: string;
-      tasksAnalyzed: number;
-      totalTasks: number;
-      analysisCount: number;
-      thresholdScore: number;
-      projectName: string;
-      usedResearch: boolean;
-   };
-   complexityAnalysis: ComplexityAnalysis[];
-}
+import { loadTaskmasterTasks } from '@/lib/taskmaster/load-tasks';
+import { mergeComplexityIntoTasks } from '@/lib/taskmaster/complexity-reports';
+import { taskLoadErrorResponse } from '@/lib/taskmaster/api-helpers';
+import { TaskLoadError } from '@/lib/taskmaster/parse-taskmaster-tasks';
 
 interface RouteParams {
    params: Promise<{
@@ -31,79 +10,28 @@ interface RouteParams {
    }>;
 }
 
+/**
+ * GET /api/taskmaster/tags/[tagName]?projectRoot=...
+ *
+ * Returns the tasks of one tag context from the active project's tasks.json,
+ * enriched with the tag's complexity report when one exists.
+ */
 export async function GET(request: NextRequest, { params }: RouteParams) {
    try {
       const { tagName } = await params;
+      const requestedRoot = request.nextUrl.searchParams.get('projectRoot');
+      const loaded = await loadTaskmasterTasks(requestedRoot);
 
-      // Read tasks.json
-      const tasksPath = TaskmasterPaths.tasks();
-      const result = await readJsonFile(tasksPath);
-
-      if (!result.success) {
-         return NextResponse.json(
-            {
-               success: false,
-               error: result.error || 'Failed to read tasks.json',
-               path: tasksPath,
-               timestamp: new Date().toISOString(),
-            },
-            { status: 404 }
-         );
+      const tagContext = loaded.tags[tagName];
+      if (!tagContext) {
+         throw new TaskLoadError('TAG_NOT_FOUND', `Tag '${tagName}' not found`, 404);
       }
 
-      // Get tasks for specific tag
-      const tagData = result.data?.[tagName];
-
-      if (!tagData) {
-         return NextResponse.json(
-            {
-               success: false,
-               error: `Tag '${tagName}' not found`,
-               timestamp: new Date().toISOString(),
-            },
-            { status: 404 }
-         );
-      }
-
-      // Try to load complexity report for this tag
-      let tasks = tagData.tasks || [];
-      try {
-         const reportPath = path.join(
-            getTaskmasterPath(),
-            'reports',
-            `task-complexity-report_${tagName}.json`
-         );
-         const reportResult = await readJsonFile(reportPath);
-
-         if (reportResult.success && reportResult.data) {
-            const report = reportResult.data as ComplexityReport;
-            const complexityMap: Record<number, ComplexityAnalysis> = {};
-
-            // Index complexity analysis by task ID
-            report.complexityAnalysis.forEach((analysis) => {
-               complexityMap[analysis.taskId] = analysis;
-            });
-
-            // Merge complexity data into tasks
-            tasks = tasks.map((task: any) => {
-               const complexityAnalysis = complexityMap[task.id];
-               if (complexityAnalysis) {
-                  return {
-                     ...task,
-                     complexity: {
-                        score: complexityAnalysis.complexityScore,
-                        expansionPrompt: complexityAnalysis.expansionPrompt,
-                        reasoning: complexityAnalysis.reasoning,
-                        recommendedSubtasks: complexityAnalysis.recommendedSubtasks,
-                     },
-                  };
-               }
-               return task;
-            });
-         }
-      } catch {
-         // No complexity report found for this tag
-      }
+      const tasks = await mergeComplexityIntoTasks(
+         loaded.source.projectRoot,
+         tagName,
+         tagContext.tasks
+      );
 
       return NextResponse.json(
          {
@@ -111,8 +39,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
             data: {
                name: tagName,
                tasks,
-               metadata: tagData.metadata || null,
+               metadata: tagContext.metadata,
             },
+            source: loaded.source,
             timestamp: new Date().toISOString(),
          },
          {
@@ -124,14 +53,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
          }
       );
    } catch (error) {
-      console.error('Error in tag-specific route:', error);
-      return NextResponse.json(
-         {
-            success: false,
-            error: error instanceof Error ? error.message : 'Internal server error',
-            timestamp: new Date().toISOString(),
-         },
-         { status: 500 }
-      );
+      return taskLoadErrorResponse(error);
    }
 }

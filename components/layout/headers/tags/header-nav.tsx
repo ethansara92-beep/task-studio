@@ -2,17 +2,18 @@
 
 import { Button } from '@/components/ui/button';
 import { SidebarTrigger } from '@/components/ui/sidebar';
-import { tags } from '@/mock-data/tags';
+import { useTags } from '@/hooks/use-taskmaster-queries';
 import { Plus } from 'lucide-react';
 
 export default function HeaderNav() {
+   const { data: tags } = useTags();
    return (
       <div className="w-full flex justify-between items-center border-b py-1.5 px-6 h-10">
          <div className="flex items-center gap-2">
             <SidebarTrigger className="" />
             <div className="flex items-center gap-1">
                <span className="text-sm font-medium">Tags</span>
-               <span className="text-xs bg-accent rounded-md px-1.5 py-1">{tags.length}</span>
+               <span className="text-xs bg-accent rounded-md px-1.5 py-1">{tags?.length ?? 0}</span>
             </div>
          </div>
          <div className="flex items-center gap-2">

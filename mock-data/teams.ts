@@ -1,4 +1,4 @@
-import { Tag, tags as defaultTags } from './tags';
+import { Tag } from './tags';
 import { User, users } from './users';
 
 export interface Team {
@@ -11,7 +11,9 @@ export interface Team {
    tags: Tag[];
 }
 
-// Function to create teams with dynamic tags
+// Builds the single workspace team from real Taskmaster tags. There is no
+// default/demo team list - callers must pass tags loaded from the tasks file
+// (see hooks/use-teams.ts).
 export function createTeamsWithTags(tags: Tag[]): Team[] {
    return [
       {
@@ -21,10 +23,7 @@ export function createTeamsWithTags(tags: Tag[]): Team[] {
          joined: true,
          color: '#8B5CF6',
          members: users,
-         tags: tags.length > 0 ? tags : defaultTags,
+         tags,
       },
    ];
 }
-
-// Default teams for fallback
-export const teams: Team[] = createTeamsWithTags(defaultTags);

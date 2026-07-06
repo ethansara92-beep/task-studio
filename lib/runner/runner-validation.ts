@@ -69,22 +69,28 @@ export function getConfiguredProjectRoot(): string {
 }
 
 /**
- * Validates an (optional) client-provided project root against the allowlist,
- * which for the MVP is exactly the server's configured root. The client value
- * is only compared - it is never used to construct paths.
+ * Validates an (optional) client-provided project root against the allowlist
+ * (Settings → General → Project root allowlist, plus the server's configured
+ * root) and resolves the active root the same way the task loader does. The
+ * client value is only compared - it is never used to construct paths unless
+ * it passes the allowlist check.
  */
 export async function resolveProjectRoot(requested?: string): Promise<string> {
-   const configured = getConfiguredProjectRoot();
-
-   if (requested !== undefined && path.resolve(requested) !== configured) {
+   let active: string;
+   try {
+      const { resolveActiveProjectRoot } = await import('@/lib/taskmaster/project-root');
+      active = await resolveActiveProjectRoot(requested);
+   } catch (error) {
       throw new RunnerError(
          'INVALID_PROJECT_ROOT',
-         'projectRoot is not allowlisted for this Task Studio instance',
+         error instanceof Error
+            ? error.message
+            : 'projectRoot is not allowlisted for this Task Studio instance',
          403
       );
    }
 
-   const tasksJson = path.join(configured, '.taskmaster', 'tasks', 'tasks.json');
+   const tasksJson = path.join(active, '.taskmaster', 'tasks', 'tasks.json');
    try {
       await fs.access(tasksJson);
    } catch {
@@ -95,7 +101,7 @@ export async function resolveProjectRoot(requested?: string): Promise<string> {
       );
    }
 
-   return configured;
+   return active;
 }
 
 /** Directory where run logs and metadata live. */

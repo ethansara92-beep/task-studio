@@ -1,9 +1,11 @@
 'use client';
 
-import { teams } from '@/mock-data/teams';
+import { useTeams } from '@/hooks/use-teams';
 import TeamLine from './team-line';
 
 export default function Teams() {
+   const { teams, isLoading, error } = useTeams();
+
    return (
       <div className="w-full">
          <div className="bg-container px-6 py-1.5 text-sm flex items-center text-muted-foreground border-b sticky top-0 z-10">
@@ -15,9 +17,15 @@ export default function Teams() {
          </div>
 
          <div className="w-full">
-            {teams.map((team) => (
-               <TeamLine key={team.id} team={team} />
-            ))}
+            {isLoading ? (
+               <div className="px-6 py-4 text-sm text-muted-foreground">Loading teams…</div>
+            ) : error ? (
+               <div className="px-6 py-4 text-sm text-red-500">
+                  Error loading teams: {error.message}
+               </div>
+            ) : (
+               teams.map((team) => <TeamLine key={team.id} team={team} />)
+            )}
          </div>
       </div>
    );

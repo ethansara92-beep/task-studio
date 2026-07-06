@@ -1,9 +1,10 @@
 'use client';
 
-import { CheckCircle2, Copy, Database, XCircle } from 'lucide-react';
+import { CheckCircle2, Copy, Database, RefreshCw, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { useDiagnostics, useMaintenance, useSettingsSection } from '@/hooks/use-settings';
+import { useRefreshTaskCache, useTaskSource } from '@/hooks/use-task-source';
 import {
    ConfirmActionButton,
    SettingRow,
@@ -30,6 +31,8 @@ export function DeveloperSection() {
    const form = useSettingsSection('developer');
    const { draft, update, replace } = form;
    const { data: diag, isLoading } = useDiagnostics();
+   const { data: taskSource } = useTaskSource();
+   const refreshCache = useRefreshTaskCache();
    const maintenance = useMaintenance();
 
    const copyDiagnostics = () => {
@@ -170,6 +173,72 @@ export function DeveloperSection() {
                         onConfirm={() => maintenance.mutate('vacuum-db')}
                         disabled={maintenance.isPending || !diag.database.available}
                      />
+                  </SettingRow>
+               </>
+            )}
+         </SettingsCard>
+
+         <SettingsCard
+            title="Task source & cache"
+            description="Tasks are always read from .taskmaster/tasks/tasks.json (canonical). The SQLite task_cache is only an index refreshed from that file - when they disagree, the file wins."
+         >
+            {!taskSource ? (
+               <p className="px-4 py-3 text-xs text-muted-foreground">Loading task source…</p>
+            ) : (
+               <>
+                  <DiagRow label="Active project root" value={taskSource.projectRoot} />
+                  <DiagRow label="Tasks file" value={taskSource.tasksFilePath} />
+                  <SettingRow label="Tasks file exists">
+                     <span className="flex items-center gap-1.5 text-xs font-mono">
+                        {taskSource.fileExists ? (
+                           <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                        ) : (
+                           <XCircle className="h-3.5 w-3.5 text-red-500" />
+                        )}
+                        {taskSource.fileExists
+                           ? taskSource.fileMtimeMs
+                              ? `modified ${new Date(taskSource.fileMtimeMs).toLocaleString()}`
+                              : 'yes'
+                           : 'not found'}
+                     </span>
+                  </SettingRow>
+                  <DiagRow
+                     label="Parsed tasks"
+                     value={
+                        taskSource.parseError
+                           ? `parse error: ${taskSource.parseError}`
+                           : taskSource.parsedTaskCount !== null
+                             ? `${taskSource.parsedTaskCount} tasks in ${taskSource.tagCount ?? 0} tag(s)`
+                             : '—'
+                     }
+                  />
+                  <DiagRow
+                     label="Cached tasks"
+                     value={
+                        taskSource.cachedTaskCount !== null
+                           ? `${taskSource.cachedTaskCount} rows${
+                                taskSource.cacheInSync === null
+                                   ? ''
+                                   : taskSource.cacheInSync
+                                     ? ' · in sync with file'
+                                     : ' · stale (refreshes on next load)'
+                             }`
+                           : 'database unavailable'
+                     }
+                  />
+                  <SettingRow
+                     label="Refresh task cache"
+                     description="Rebuilds the SQLite task_cache index from tasks.json."
+                  >
+                     <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => refreshCache.mutate()}
+                        disabled={refreshCache.isPending || taskSource.cachedTaskCount === null}
+                     >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                        Refresh cache
+                     </Button>
                   </SettingRow>
                </>
             )}

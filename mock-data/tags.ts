@@ -55,20 +55,24 @@ export const health: Health[] = [
    },
 ];
 
-// Function to create tag from Taskmaster tag data
+// Builds a Tag view-model from real Taskmaster tag data. Progress and health
+// are derived from actual status counts when provided - never invented.
 export function createTagFromData(
    tagName: string,
    taskCount: number,
    metadata?: any,
-   index: number = 0
+   index: number = 0,
+   statusCounts?: { pending: number; in_progress: number; done: number; cancelled: number }
 ): Tag {
-   // Calculate completion percentage based on task statuses (if available)
-   // For now, using a mock calculation
-   const percentComplete = Math.floor(Math.random() * 100);
+   const totalTasks = statusCounts
+      ? statusCounts.pending + statusCounts.in_progress + statusCounts.done + statusCounts.cancelled
+      : taskCount;
+   const percentComplete =
+      statusCounts && totalTasks > 0 ? Math.round((statusCounts.done / totalTasks) * 100) : 0;
 
-   // Select status based on some logic (could be based on task completion)
-   const tagStatus =
-      percentComplete === 100
+   // Map completion to a status bucket (unknown → first/backlog status).
+   const tagStatus = statusCounts
+      ? percentComplete === 100
          ? status[5]
          : percentComplete > 80
            ? status[4]
@@ -78,17 +82,18 @@ export function createTagFromData(
                ? status[2]
                : percentComplete > 20
                  ? status[1]
-                 : status[0];
+                 : status[0]
+      : status[0];
 
-   // Determine health based on various factors
-   const tagHealth =
-      percentComplete > 70
+   const tagHealth = statusCounts
+      ? percentComplete > 70
          ? health[2] // on-track
          : percentComplete > 40
            ? health[3] // at-risk
            : percentComplete > 20
              ? health[1] // off-track
-             : health[0]; // no-update
+             : health[0] // no-update
+      : health[0];
 
    return {
       id: tagName,
@@ -106,6 +111,8 @@ export function createTagFromData(
       priority: priorities[index % priorities.length],
       health: tagHealth,
       taskCount,
+      statusCounts,
+      totalTasks,
    };
 }
 
@@ -117,9 +124,3 @@ export function getTagsFromData(
       createTagFromData(tag.name, tag.taskCount, tag.metadata, index)
    );
 }
-
-// Default mock tags for fallback/demo purposes
-export const tags: Tag[] = [
-   createTagFromData('master', 8, { created: '2025-03-01' }, 0),
-   createTagFromData('task-viewer', 10, { created: '2025-03-08' }, 1),
-];

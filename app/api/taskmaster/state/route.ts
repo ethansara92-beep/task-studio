@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server';
+import path from 'path';
 import { readJsonFile } from '@/utils/filesystem';
-import { TaskmasterPaths } from '@/lib/taskmaster-paths';
+import { resolveActiveProjectRoot } from '@/lib/taskmaster/project-root';
 
 export async function GET() {
    try {
-      // Read state.json from the .taskmaster directory
-      const statePath = TaskmasterPaths.state();
+      // Read state.json from the active project's .taskmaster directory
+      const projectRoot = await resolveActiveProjectRoot();
+      const statePath = path.join(projectRoot, '.taskmaster', 'state.json');
       const result = await readJsonFile(statePath);
 
       if (!result.success) {

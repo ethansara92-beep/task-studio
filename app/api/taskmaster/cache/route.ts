@@ -6,7 +6,7 @@ import {
    refreshTaskCache,
    refreshTaskCacheIfStale,
 } from '@/lib/db/repositories/task-cache-repository';
-import { getConfiguredProjectRoot } from '@/lib/runner/runner-validation';
+import { resolveActiveProjectRoot } from '@/lib/taskmaster/project-root';
 
 /**
  * Read-through task cache/index. `.taskmaster/tasks/tasks.json` stays
@@ -43,7 +43,9 @@ export async function GET(request: NextRequest) {
       }
 
       const db = getDb();
-      const projectRoot = getConfiguredProjectRoot();
+      const projectRoot = await resolveActiveProjectRoot(
+         request.nextUrl.searchParams.get('projectRoot')
+      );
       const refresh = await refreshTaskCacheIfStale(db, projectRoot);
       const tasks = getCachedTasks(db, projectRoot, {
          tag: query.data.tag,
@@ -72,10 +74,12 @@ export async function GET(request: NextRequest) {
    }
 }
 
-export async function POST() {
+export async function POST(request: NextRequest) {
    try {
       const db = getDb();
-      const projectRoot = getConfiguredProjectRoot();
+      const projectRoot = await resolveActiveProjectRoot(
+         request.nextUrl.searchParams.get('projectRoot')
+      );
       const result = await refreshTaskCache(db, projectRoot);
 
       return NextResponse.json({

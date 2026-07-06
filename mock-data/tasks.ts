@@ -35,9 +35,9 @@ const generateTasksRanks = () => {
 };
 generateTasksRanks();
 
-// Mock tasks data has been removed as the app now uses real Taskmaster data
-// Only keeping the Task interface and utility functions that are still in use
-export const tasks: Task[] = [];
+// Mock tasks data has been removed - the app loads real Taskmaster data from
+// .taskmaster/tasks/tasks.json. Only the Task view-model interface and
+// utility functions remain in use.
 
 export function groupTasksByStatus(tasks: Task[]): Record<string, Task[]> {
    return tasks.reduce<Record<string, Task[]>>((acc, task) => {
