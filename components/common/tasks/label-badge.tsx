@@ -1,5 +1,5 @@
 import { Badge } from '@/components/ui/badge';
-import { LabelInterface } from '@/ui-data/labels';
+import { LabelInterface } from '@/lib/labels';
 
 export function LabelBadge({ label }: { label: LabelInterface[] }) {
    return (

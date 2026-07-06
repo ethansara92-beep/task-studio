@@ -1,6 +1,6 @@
 'use client';
 
-import { users } from '@/ui-data/users';
+import { users } from '@/lib/users';
 import MemberLine from './member-line';
 
 export default function Members() {

@@ -1,6 +1,6 @@
 'use client';
 
-import { Team, createTeamsWithTags } from '@/ui-data/teams';
+import { Team, createTeamsWithTags } from '@/lib/teams';
 import { useTagsFromData } from './use-tags-from-data';
 
 /**

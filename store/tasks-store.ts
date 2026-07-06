@@ -1,9 +1,9 @@
-import { groupTasksByStatus, Task } from '@/ui-data/tasks';
-import { LabelInterface } from '@/ui-data/labels';
-import { Priority } from '@/ui-data/priorities';
-import { Tag } from '@/ui-data/tags';
-import { Status } from '@/ui-data/status';
-import { User } from '@/ui-data/users';
+import { groupTasksByStatus, Task } from '@/lib/task-view';
+import { LabelInterface } from '@/lib/labels';
+import { Priority } from '@/lib/priorities';
+import { Tag } from '@/lib/tags';
+import { Status } from '@/lib/status';
+import { User } from '@/lib/users';
 import { create } from 'zustand';
 
 interface FilterOptions {

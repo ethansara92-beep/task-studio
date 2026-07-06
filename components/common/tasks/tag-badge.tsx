@@ -1,5 +1,5 @@
 import { Badge } from '@/components/ui/badge';
-import { Tag } from '@/ui-data/tags';
+import { Tag } from '@/lib/tags';
 import Link from 'next/link';
 import { GitBranch } from 'lucide-react';
 

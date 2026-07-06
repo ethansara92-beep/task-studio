@@ -3,7 +3,7 @@
 import TagLine from '@/components/common/tags/tag-line';
 import { useTags } from '@/hooks/use-taskmaster-queries';
 import { useAllTasks } from '@/hooks/use-all-tasks';
-import { createTagFromData } from '@/ui-data/tags';
+import { createTagFromData } from '@/lib/tags';
 import { useMemo } from 'react';
 import { TaskmasterTask } from '@/types/taskmaster';
 

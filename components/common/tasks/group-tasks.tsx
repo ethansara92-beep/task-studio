@@ -1,7 +1,7 @@
 'use client';
 
-import { Task } from '@/ui-data/tasks';
-import { Status } from '@/ui-data/status';
+import { Task } from '@/lib/task-view';
+import { Status } from '@/lib/status';
 import { useTasksStore } from '@/store/tasks-store';
 import { cn } from '@/lib/utils';
 import { Plus } from 'lucide-react';
@@ -11,7 +11,7 @@ import { Button } from '../../ui/button';
 import { TaskDragType, TaskGrid } from './task-grid';
 import { TaskWithSubtasks } from './task-with-subtasks';
 import { useCreateTaskStore } from '@/store/create-task-store';
-import { sortTasksByPriority } from '@/ui-data/tasks';
+import { sortTasksByPriority } from '@/lib/task-view';
 import { AnimatePresence, motion } from 'motion/react';
 import { useQueryState } from 'nuqs';
 

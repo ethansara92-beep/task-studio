@@ -1,4 +1,4 @@
-import { Status } from '@/ui-data/status';
+import { Status } from '@/lib/status';
 import { create } from 'zustand';
 
 interface CreateTaskState {

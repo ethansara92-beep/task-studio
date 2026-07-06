@@ -6,11 +6,11 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { RiEditLine } from '@remixicon/react';
 import { useState, useEffect, useCallback } from 'react';
-import { Task } from '@/ui-data/tasks';
-import { priorities } from '@/ui-data/priorities';
-import { status } from '@/ui-data/status';
+import { Task } from '@/lib/task-view';
+import { priorities } from '@/lib/priorities';
+import { status } from '@/lib/status';
 import { useTasksStore } from '@/store/tasks-store';
-import { users } from '@/ui-data/users';
+import { users } from '@/lib/users';
 import { useCreateTaskStore } from '@/store/create-task-store';
 import { toast } from 'sonner';
 import { v4 as uuidv4 } from 'uuid';
@@ -18,10 +18,10 @@ import { StatusSelector } from './status-selector';
 import { PrioritySelector } from './priority-selector';
 import { AssigneeSelector } from './assignee-selector';
 import { TagSelector } from './tag-selector';
-import { ranks } from '@/ui-data/tasks';
+import { ranks } from '@/lib/task-view';
 import { DialogTitle } from '@radix-ui/react-dialog';
 import { useCurrentTag, useTags } from '@/hooks/use-taskmaster-queries';
-import { createTagFromData } from '@/ui-data/tags';
+import { createTagFromData } from '@/lib/tags';
 import { usePathname } from 'next/navigation';
 
 export function CreateNewTask() {

@@ -17,7 +17,7 @@ import {
    SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import Link from 'next/link';
-import { workspaceItems } from '@/ui-data/side-bar-nav';
+import { workspaceItems } from '@/components/layout/sidebar/nav-items';
 import { useRouter } from 'next/navigation';
 
 export function NavWorkspace() {

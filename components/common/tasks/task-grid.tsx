@@ -1,6 +1,6 @@
 'use client';
 
-import { Task } from '@/ui-data/tasks';
+import { Task } from '@/lib/task-view';
 import { format } from 'date-fns';
 import { motion } from 'motion/react';
 import { useEffect, useRef } from 'react';

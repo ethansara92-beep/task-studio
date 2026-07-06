@@ -9,7 +9,7 @@ import {
    SidebarMenuButton,
    SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { accountItems } from '@/ui-data/side-bar-nav';
+import { accountItems } from '@/components/layout/sidebar/nav-items';
 
 export function NavAccount() {
    return (

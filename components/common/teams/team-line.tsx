@@ -1,4 +1,4 @@
-import { Team } from '@/ui-data/teams';
+import { Team } from '@/lib/teams';
 import { MembersTooltip } from './members-tooltip';
 import { TagsTooltip } from './tags-tooltip';
 import { Check } from 'lucide-react';

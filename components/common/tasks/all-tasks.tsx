@@ -3,11 +3,11 @@
 import { useCurrentTagWithTasks, useTasksByTag } from '@/hooks/use-taskmaster-queries';
 import { useAllTasks } from '@/hooks/use-all-tasks';
 import { TaskmasterTask } from '@/types/taskmaster';
-import { createTagFromData } from '@/ui-data/tags';
+import { createTagFromData } from '@/lib/tags';
 import { useQueryState } from 'nuqs';
-import { Priority } from '@/ui-data/priorities';
+import { Priority } from '@/lib/priorities';
 import { TASKMASTER_STATUSES, TASKMASTER_STATUS_MAP } from '@/lib/taskmaster-constants';
-import { User } from '@/ui-data/users';
+import { User } from '@/lib/users';
 import { useSearchStore } from '@/store/search-store';
 import { useFilterStore } from '@/store/filter-store';
 import { FC, useMemo } from 'react';
@@ -20,7 +20,7 @@ import { CustomDragLayer } from './task-grid';
 import { TaskSourceBanner } from './task-source-banner';
 import { TaskLoadErrorState, TasksEmptyState } from './task-load-error';
 import { cn } from '@/lib/utils';
-import { Task } from '@/ui-data/tasks';
+import { Task } from '@/lib/task-view';
 
 // Generate tag prefix from tag name
 function getTagPrefix(tagName: string): string {

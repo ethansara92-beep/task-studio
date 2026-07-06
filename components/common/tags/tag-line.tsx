@@ -1,4 +1,4 @@
-import { Tag } from '@/ui-data/tags';
+import { Tag } from '@/lib/tags';
 import { HealthPopover } from './health-popover';
 import { PrioritySelector } from './priority-selector';
 import { LeadSelector } from './lead-selector';

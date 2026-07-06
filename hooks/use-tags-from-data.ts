@@ -1,5 +1,5 @@
 import { useTags } from './use-taskmaster-queries';
-import { getTagsFromData, Tag } from '@/ui-data/tags';
+import { getTagsFromData, Tag } from '@/lib/tags';
 
 export function useTagsFromData(): {
    tags: Tag[];

@@ -8,7 +8,7 @@ import {
    DropdownMenuSeparator,
    DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { statusUserColors, User, users } from '@/ui-data/users';
+import { statusUserColors, User, users } from '@/lib/users';
 import { CheckIcon, CircleUserRound, UserIcon } from 'lucide-react';
 import { useState, useEffect } from 'react';
 

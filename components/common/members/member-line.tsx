@@ -1,5 +1,5 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { statusUserColors, User } from '@/ui-data/users';
+import { statusUserColors, User } from '@/lib/users';
 import { format } from 'date-fns';
 import { TeamsTooltip } from './teams-tooltip';
 
