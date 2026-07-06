@@ -61,6 +61,10 @@ Everything lives under the project's `.taskmaster` directory (git-ignored):
 - `.taskmaster/runs/<runId>.json` — run metadata (mode, task, status, timestamps, exit code)
 - `.taskmaster/runner.lock` — present while a run is active; used to detect concurrent or
   stale runners
+- `.taskmaster/task-studio.sqlite` — the app database. Run history is mirrored into the
+  `runner_runs` table (legacy run files are imported once per server process), log metadata
+  into `runner_log_index`, and the lock into `runner_locks`. Full logs stay on disk — the
+  database stores metadata only. See [sqlite.md](sqlite.md).
 
 Run IDs look like `2026-07-05T10-30-00-abc123`.
 

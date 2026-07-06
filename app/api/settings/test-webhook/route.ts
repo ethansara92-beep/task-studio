@@ -3,6 +3,11 @@ import { z } from 'zod';
 import { SECRET_MASK } from '@/types/settings';
 import { sendTestWebhook } from '@/lib/settings/webhook-delivery';
 import { appendAuditLog, loadSettings } from '@/lib/settings/settings-service';
+import { tryGetDb } from '@/lib/db';
+import {
+   recordWebhookDelivery,
+   updateWebhookTestResult,
+} from '@/lib/db/repositories/webhooks-repository';
 
 const bodySchema = z.object({
    /** Where to find the URL/secret. Masked values are resolved from storage. */
@@ -74,8 +79,29 @@ export async function POST(request: NextRequest) {
       }
 
       const result = await sendTestWebhook(url, secret, settings.webhooks.timeoutMs);
+
+      // Record the test outcome in the webhook mirror + delivery history.
+      if (body.data.target === 'endpoint' && body.data.endpointId) {
+         try {
+            const db = tryGetDb();
+            if (db) {
+               updateWebhookTestResult(db, body.data.endpointId, result);
+               recordWebhookDelivery(db, {
+                  webhookId: body.data.endpointId,
+                  eventType: 'webhook.test',
+                  status: result.ok ? 'delivered' : 'failed',
+                  responseStatus: result.status ?? null,
+                  error: result.error ?? null,
+                  deliveredAt: result.ok ? new Date().toISOString() : null,
+               });
+            }
+         } catch {
+            // Delivery history is best-effort.
+         }
+      }
+
       await appendAuditLog(
-         'validation.performed',
+         'webhook.tested',
          `Test webhook sent (target: ${body.data.target}, ok: ${result.ok})`,
          { enabled: settings.security.auditLog }
       );

@@ -3,6 +3,7 @@ import path from 'node:path';
 import { getSettingsFilePath, loadSettings } from '@/lib/settings/settings-service';
 import { validateBinary } from '@/lib/settings/validate-tools';
 import { getConfiguredProjectRoot } from '@/lib/runner/runner-validation';
+import { getDbStatus } from '@/lib/db';
 import packageJson from '@/package.json';
 
 export async function GET() {
@@ -27,6 +28,7 @@ export async function GET() {
             runsDirPath: path.join(projectRoot, '.taskmaster', 'runs'),
             taskmaster: { path: settings.taskmaster.tmPath, ...tm },
             claude: { path: settings.claude.claudePath, ...claude },
+            database: getDbStatus(),
          },
          timestamp: new Date().toISOString(),
       });
