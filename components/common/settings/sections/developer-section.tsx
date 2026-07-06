@@ -1,6 +1,6 @@
 'use client';
 
-import { CheckCircle2, Copy, XCircle } from 'lucide-react';
+import { CheckCircle2, Copy, Database, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { useDiagnostics, useMaintenance, useSettingsSection } from '@/hooks/use-settings';
@@ -91,6 +91,90 @@ export function DeveloperSection() {
             )}
          </SettingsCard>
 
+         <SettingsCard
+            title="Database"
+            description="Local SQLite database for settings, projects, runner history, notifications and audit events. Taskmaster's tasks.json is never stored here."
+         >
+            {isLoading || !diag ? (
+               <p className="px-4 py-3 text-xs text-muted-foreground">Loading database status…</p>
+            ) : (
+               <>
+                  <SettingRow label="Status">
+                     <span className="flex items-center gap-1.5 text-xs font-mono">
+                        {diag.database.available ? (
+                           <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                        ) : (
+                           <XCircle className="h-3.5 w-3.5 text-red-500" />
+                        )}
+                        {diag.database.available
+                           ? `Ready (migration v${diag.database.migrationVersion})`
+                           : (diag.database.error ?? 'Unavailable')}
+                     </span>
+                  </SettingRow>
+                  <DiagRow label="Database file" value={diag.database.path} />
+                  <DiagRow
+                     label="Size"
+                     value={
+                        diag.database.sizeBytes !== null
+                           ? `${(diag.database.sizeBytes / 1024).toFixed(1)} KB`
+                           : diag.database.exists
+                             ? 'unknown'
+                             : 'not created yet'
+                     }
+                  />
+                  <DiagRow
+                     label="Contents"
+                     value={
+                        diag.database.available
+                           ? `${diag.database.projectCount ?? 0} projects · ${diag.database.runCount ?? 0} runs · ${diag.database.activeLockCount ?? 0} active locks`
+                           : '—'
+                     }
+                  />
+                  <SettingRow
+                     label="Initialize / run migrations"
+                     description="Creates the database file if missing and applies pending migrations."
+                  >
+                     <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => maintenance.mutate('init-db')}
+                        disabled={maintenance.isPending}
+                     >
+                        <Database className="h-3.5 w-3.5" />
+                        Run migrations
+                     </Button>
+                  </SettingRow>
+                  <SettingRow
+                     label="Export database backup"
+                     description="Writes a consistent snapshot to .taskmaster/backups/."
+                  >
+                     <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => maintenance.mutate('backup-db')}
+                        disabled={maintenance.isPending || !diag.database.available}
+                     >
+                        Export backup
+                     </Button>
+                  </SettingRow>
+                  <SettingRow
+                     label="Vacuum database"
+                     description="Compacts the database file and reclaims free space."
+                  >
+                     <ConfirmActionButton
+                        label="Vacuum"
+                        title="Vacuum database?"
+                        description="Rebuilds the database file. Safe, but may take a moment."
+                        confirmLabel="Vacuum"
+                        variant="outline"
+                        onConfirm={() => maintenance.mutate('vacuum-db')}
+                        disabled={maintenance.isPending || !diag.database.available}
+                     />
+                  </SettingRow>
+               </>
+            )}
+         </SettingsCard>
+
          <SettingsCard title="Debugging">
             <SwitchRow
                label="Debug logging"
@@ -116,7 +200,7 @@ export function DeveloperSection() {
                <ConfirmActionButton
                   label="Clear audit log"
                   title="Clear audit log?"
-                  description="Deletes .taskmaster/task-studio-audit.log."
+                  description="Deletes stored audit events (database) and .taskmaster/task-studio-audit.log."
                   confirmLabel="Clear"
                   variant="outline"
                   onConfirm={() => maintenance.mutate('clear-audit-log')}

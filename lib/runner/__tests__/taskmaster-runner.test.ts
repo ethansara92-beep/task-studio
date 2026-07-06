@@ -36,6 +36,8 @@ describe.runIf(IS_POSIX)('taskmaster-runner service', () => {
    beforeEach(() => {
       root = makeProject({ master: { tasks: [] } });
       process.env.TASKMASTER_RUNNER_BIN = makeFakeTm(root);
+      // Keep the app database inside the test sandbox, not the repo.
+      process.env.TASK_STUDIO_DB_PATH = path.join(root, 'test-db.sqlite');
    });
 
    afterEach(async () => {
@@ -46,6 +48,7 @@ describe.runIf(IS_POSIX)('taskmaster-runner service', () => {
          await waitFor(() => getActiveRun(root) === null);
       }
       delete process.env.TASKMASTER_RUNNER_BIN;
+      delete process.env.TASK_STUDIO_DB_PATH;
       rmSync(root, { recursive: true, force: true });
    });
 

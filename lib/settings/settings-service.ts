@@ -1,6 +1,16 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { getTaskmasterPath } from '@/lib/taskmaster-paths';
+import { tryGetDb } from '@/lib/db';
+import {
+   clearSettingsDoc,
+   loadSettingsDoc,
+   saveSettingsDoc,
+} from '@/lib/db/repositories/settings-repository';
+import { syncProjectsFromSettings } from '@/lib/db/repositories/projects-repository';
+import { syncWebhooksFromSettings } from '@/lib/db/repositories/webhooks-repository';
+import { syncIntegrationsFromSettings } from '@/lib/db/repositories/integrations-repository';
+import { addAuditEvent } from '@/lib/db/repositories/audit-repository';
 import {
    SECRET_MASK,
    SETTINGS_VERSION,
@@ -8,6 +18,16 @@ import {
    createDefaultSettings,
    settingsSchema,
 } from '@/types/settings';
+
+/**
+ * Settings persistence.
+ *
+ * Primary store: the SQLite app database (`app_settings` table). The legacy
+ * JSON file (`.taskmaster/task-studio-settings.json`) is still maintained as
+ * a human-readable mirror on every save, imported once into SQLite when the
+ * database is empty, and used as the full fallback store on Node runtimes
+ * without `node:sqlite`. It is never deleted automatically.
+ */
 
 export const SETTINGS_FILE_NAME = 'task-studio-settings.json';
 const AUDIT_FILE_NAME = 'task-studio-audit.log';
@@ -49,10 +69,11 @@ export function mergeWithDefaults<T extends Record<string, unknown>>(
 }
 
 /**
- * Loads settings from disk. A missing file yields defaults; a corrupted or
- * schema-invalid file is backed up next to itself and replaced by defaults.
+ * Loads settings from the legacy JSON file. A missing file yields defaults;
+ * a corrupted or schema-invalid file is backed up next to itself and
+ * replaced by defaults.
  */
-export async function loadSettings(): Promise<TaskStudioSettings> {
+async function loadSettingsFromFile(): Promise<TaskStudioSettings> {
    const filePath = getSettingsFilePath();
 
    let raw: string;
@@ -83,6 +104,45 @@ export async function loadSettings(): Promise<TaskStudioSettings> {
    return parsed.data;
 }
 
+/**
+ * Loads settings. SQLite is the source of truth when available; when its
+ * rows are empty the legacy JSON file is imported once (and kept on disk).
+ */
+export async function loadSettings(): Promise<TaskStudioSettings> {
+   const db = tryGetDb();
+   if (!db) return loadSettingsFromFile();
+
+   let doc: Record<string, unknown> | null = null;
+   try {
+      doc = loadSettingsDoc(db);
+   } catch {
+      return loadSettingsFromFile();
+   }
+
+   if (doc === null) {
+      // First run with a database: import the legacy file (or defaults).
+      const fromFile = await loadSettingsFromFile();
+      try {
+         saveSettingsDoc(db, fromFile as unknown as Record<string, unknown>);
+      } catch {
+         // Import is best-effort; the file remains the fallback.
+      }
+      return fromFile;
+   }
+
+   const merged = mergeWithDefaults(
+      createDefaultSettings() as unknown as Record<string, unknown>,
+      doc
+   );
+   const parsed = settingsSchema.safeParse(merged);
+   if (!parsed.success) {
+      // Stored rows are kept for inspection; runtime falls back to defaults.
+      return createDefaultSettings();
+   }
+   parsed.data.version = SETTINGS_VERSION;
+   return parsed.data;
+}
+
 async function backupCorruptedFile(filePath: string, raw: string): Promise<void> {
    try {
       const stamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -92,19 +152,40 @@ async function backupCorruptedFile(filePath: string, raw: string): Promise<void>
    }
 }
 
-/** Atomically persists validated settings and stamps workspace.updatedAt. */
-export async function saveSettings(settings: TaskStudioSettings): Promise<TaskStudioSettings> {
+/** Atomically writes the human-readable JSON mirror of the settings. */
+async function writeSettingsFile(settings: TaskStudioSettings): Promise<void> {
    const filePath = getSettingsFilePath();
    await fs.mkdir(path.dirname(filePath), { recursive: true });
+   const tmpPath = `${filePath}.tmp`;
+   await fs.writeFile(tmpPath, JSON.stringify(settings, null, 2), 'utf-8');
+   await fs.rename(tmpPath, filePath);
+}
 
+/**
+ * Persists validated settings (SQLite + JSON mirror) and stamps
+ * workspace.updatedAt. Also mirrors projects/webhooks/integrations into
+ * their relational tables so future features can query them directly.
+ */
+export async function saveSettings(settings: TaskStudioSettings): Promise<TaskStudioSettings> {
    const now = new Date().toISOString();
    settings.workspace.updatedAt = now;
    if (!settings.workspace.createdAt) settings.workspace.createdAt = now;
    settings.version = SETTINGS_VERSION;
 
-   const tmpPath = `${filePath}.tmp`;
-   await fs.writeFile(tmpPath, JSON.stringify(settings, null, 2), 'utf-8');
-   await fs.rename(tmpPath, filePath);
+   const db = tryGetDb();
+   if (db) {
+      saveSettingsDoc(db, settings as unknown as Record<string, unknown>);
+      // Relational mirrors are best-effort - settings rows are already saved.
+      try {
+         syncProjectsFromSettings(db, settings);
+         syncWebhooksFromSettings(db, settings);
+         syncIntegrationsFromSettings(db, settings);
+      } catch {
+         // Mirror sync failures never block a settings save.
+      }
+   }
+
+   await writeSettingsFile(settings);
    return settings;
 }
 
@@ -124,6 +205,14 @@ export async function backupSettings(reason: string): Promise<string | null> {
 
 export async function resetSettings(): Promise<TaskStudioSettings> {
    await backupSettings('pre-reset');
+   const db = tryGetDb();
+   if (db) {
+      try {
+         clearSettingsDoc(db);
+      } catch {
+         // saveSettings below overwrites the rows anyway.
+      }
+   }
    const defaults = createDefaultSettings();
    return saveSettings(defaults);
 }
@@ -194,21 +283,57 @@ export type AuditEvent =
    | 'settings.updated'
    | 'settings.reset'
    | 'settings.imported'
+   | 'project.added'
+   | 'project.removed'
+   | 'project.validated'
    | 'runner.started'
    | 'runner.stopped'
+   | 'runner.completed'
+   | 'runner.failed'
+   | 'runner.cancelled'
+   | 'runner.lock_cleared'
+   | 'webhook.tested'
+   | 'integration.updated'
+   | 'taskcache.refreshed'
    | 'validation.performed'
    | 'maintenance.performed';
 
+export interface AuditContext {
+   enabled?: boolean;
+   projectRoot?: string;
+   taskId?: string | null;
+   runId?: string | null;
+}
+
 /**
- * Appends a line to the local audit log (JSONL). Only event names and
- * non-sensitive details are recorded - never setting values or secrets.
+ * Records an audit event. Written to the `audit_events` table when the
+ * database is available, otherwise appended to the legacy JSONL log. Only
+ * event names and non-sensitive details are recorded - never setting values
+ * or secrets.
  */
 export async function appendAuditLog(
    event: AuditEvent,
    detail: string,
-   options?: { enabled?: boolean }
+   options?: AuditContext
 ): Promise<void> {
    if (options?.enabled === false) return;
+
+   const db = tryGetDb();
+   if (db) {
+      try {
+         addAuditEvent(db, {
+            eventType: event,
+            message: detail,
+            projectRoot: options?.projectRoot ?? null,
+            taskId: options?.taskId ?? null,
+            runId: options?.runId ?? null,
+         });
+         return;
+      } catch {
+         // Fall through to the file-based log.
+      }
+   }
+
    try {
       const line = `${JSON.stringify({ at: new Date().toISOString(), event, detail })}\n`;
       const auditPath = getAuditLogPath();

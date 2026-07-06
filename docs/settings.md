@@ -4,20 +4,28 @@ Task Studio has a Linear-inspired Settings area (sidebar → Settings, or `/sett
 the app, the Taskmaster/Claude Code integration, the local runner, and connectivity. This page
 documents where settings live, what each section does, and how to troubleshoot.
 
-## Config file
+## Where settings are stored
 
-Settings are stored per machine at:
+Settings are stored per machine in the SQLite app database (primary store) with a
+human-readable JSON mirror:
 
 ```
-<project>/.taskmaster/task-studio-settings.json
+<project>/.taskmaster/task-studio.sqlite          # primary store (app_settings table)
+<project>/.taskmaster/task-studio-settings.json   # JSON mirror, rewritten on every save
 ```
+
+The JSON mirror is imported into the database on first run and kept up to date afterwards; it
+also serves as the full fallback store on Node.js runtimes older than 22.5 (no `node:sqlite`).
+See [sqlite.md](sqlite.md) for the full database documentation.
 
 - **Versioned** (`"version": 1`) and validated with a Zod schema on every load and save.
 - **Merged with defaults**: partial or older files are deep-merged over defaults, so new
   settings appear automatically after upgrades.
 - **Corruption-safe**: unparseable or schema-invalid files are backed up next to the original
   (`task-studio-settings.json.corrupt-<timestamp>.bak`) and replaced with defaults.
-- **Git-ignored** along with the audit log (`task-studio-audit.log`) - these are machine-local.
+- **Git-ignored** along with the database and the audit log - these are machine-local.
+- **Audit events** are written to the database (`audit_events` table); the legacy
+  `task-studio-audit.log` JSONL file is only used when the database is unavailable.
 - Task data is never stored here; `.taskmaster/tasks/tasks.json` belongs to Taskmaster and is
   never written by the settings system.
 

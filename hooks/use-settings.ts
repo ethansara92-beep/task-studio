@@ -96,6 +96,7 @@ export function useMaintenance() {
       onSuccess: (data) => {
          toast.success(data.detail);
          queryClient.invalidateQueries({ queryKey: ['runner'] });
+         queryClient.invalidateQueries({ queryKey: settingsKeys.diagnostics() });
       },
       onError: (error: Error) => toast.error(error.message),
    });

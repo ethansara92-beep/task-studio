@@ -19,6 +19,19 @@ import {
 } from './runner-validation';
 import { RunnerRuntimeConfig, getRunnerRuntimeConfig } from './runner-config';
 import { appendAuditLog } from '@/lib/settings/settings-service';
+import { tryGetDb } from '@/lib/db';
+import {
+   acquireLock as dbAcquireLock,
+   deleteRuns as dbDeleteRuns,
+   insertRunIfMissing as dbInsertRunIfMissing,
+   listRecentRuns as dbListRecentRuns,
+   markRunInterrupted as dbMarkRunInterrupted,
+   pruneRuns as dbPruneRuns,
+   releaseLock as dbReleaseLock,
+   upsertLogIndex as dbUpsertLogIndex,
+   upsertRun as dbUpsertRun,
+} from '@/lib/db/repositories/runner-runs-repository';
+import { addNotification } from '@/lib/db/repositories/notifications-repository';
 
 const DEFAULT_GRACEFUL_KILL_TIMEOUT_MS = 5000;
 const RECENT_RUNS_LIMIT = 20;
@@ -31,6 +44,60 @@ interface ActiveRun {
    cancelRequested: boolean;
    stopGraceTimeoutMs: number;
    auditEnabled: boolean;
+   notifications: {
+      inApp: boolean;
+      onRunComplete: boolean;
+      onRunFail: boolean;
+      onRunCancel: boolean;
+   };
+}
+
+/**
+ * Best-effort database persistence. Files under `.taskmaster/runs/` remain
+ * the per-run on-disk artifact (and the fallback on Node runtimes without
+ * `node:sqlite`); the database mirrors them as queryable run history. A DB
+ * failure must never break a run, so every call is wrapped.
+ */
+function dbPersist(fn: (db: NonNullable<ReturnType<typeof tryGetDb>>) => void): void {
+   try {
+      const db = tryGetDb();
+      if (db) fn(db);
+   } catch {
+      // Database persistence is best-effort for the runner.
+   }
+}
+
+/** Project roots whose legacy run files were already imported this process. */
+const backfilledRoots = new Set<string>();
+
+/** One-time import of legacy `.taskmaster/runs/*.json` history into SQLite. */
+async function backfillRunsFromDisk(projectRoot: string): Promise<void> {
+   if (backfilledRoots.has(projectRoot)) return;
+   backfilledRoots.add(projectRoot);
+
+   const db = tryGetDb();
+   if (!db) return;
+
+   let entries: string[];
+   try {
+      entries = await fs.readdir(getRunsDir(projectRoot));
+   } catch {
+      return;
+   }
+
+   for (const name of entries) {
+      if (!name.endsWith('.json')) continue;
+      try {
+         const raw = await fs.readFile(path.join(getRunsDir(projectRoot), name), 'utf-8');
+         const parsed = JSON.parse(raw) as RunRecord & { projectRoot?: string };
+         if (typeof parsed.runId !== 'string' || typeof parsed.startedAt !== 'string') continue;
+         const record = { ...parsed };
+         delete record.projectRoot;
+         dbInsertRunIfMissing(db, projectRoot, record);
+      } catch {
+         // Skip unreadable metadata files.
+      }
+   }
 }
 
 /**
@@ -189,6 +256,12 @@ export async function startRun(options: StartRunOptions): Promise<RunRecord> {
       cancelRequested: false,
       stopGraceTimeoutMs: config.stopGraceTimeoutMs,
       auditEnabled: config.auditEnabled,
+      notifications: {
+         inApp: config.settings.notifications.inApp,
+         onRunComplete: config.settings.notifications.onRunComplete,
+         onRunFail: config.settings.notifications.onRunFail,
+         onRunCancel: config.settings.notifications.onRunCancel,
+      },
    };
    activeRuns.set(projectRoot, activeRun);
 
@@ -206,6 +279,7 @@ export async function startRun(options: StartRunOptions): Promise<RunRecord> {
       }
       if (lock?.stale) {
          await removeLockFile(projectRoot);
+         dbPersist((db) => dbReleaseLock(db, projectRoot));
       }
 
       const runsDir = getRunsDir(projectRoot);
@@ -258,10 +332,27 @@ export async function startRun(options: StartRunOptions): Promise<RunRecord> {
          if (activeRuns.get(projectRoot) !== activeRun) return;
          await writeLockFile(projectRoot, record);
          await writeRunMetadata(projectRoot, record);
+         dbPersist((db) => {
+            dbUpsertRun(db, projectRoot, record);
+            dbAcquireLock(db, projectRoot, { runId: record.runId, pid: record.pid });
+         });
       });
       void appendAuditLog('runner.started', `Run ${record.runId} started (mode: ${mode})`, {
          enabled: config.auditEnabled,
+         projectRoot,
+         taskId: record.taskId,
+         runId: record.runId,
       });
+      if (config.settings.notifications.inApp && config.settings.notifications.onRunStart) {
+         dbPersist((db) => {
+            addNotification(db, {
+               type: 'runner',
+               title: 'Run started',
+               message: `Run ${record.runId} started (mode: ${mode})`,
+               metadata: { runId: record.runId, mode, taskId: record.taskId },
+            });
+         });
+      }
 
       return { ...record };
    } catch (error) {
@@ -278,12 +369,14 @@ export async function startRun(options: StartRunOptions): Promise<RunRecord> {
             'Install Taskmaster and make sure the command works in a terminal, ' +
             'or set its path in Settings → Taskmaster & Claude Code.';
          await writeRunMetadata(projectRoot, record).catch(() => {});
+         dbPersist((db) => dbUpsertRun(db, projectRoot, record));
          throw new RunnerError('TM_NOT_FOUND', record.error, 500);
       }
 
       record.error = error instanceof Error ? error.message : String(error);
       if (error instanceof RunnerError) throw error;
       await writeRunMetadata(projectRoot, record).catch(() => {});
+      dbPersist((db) => dbUpsertRun(db, projectRoot, record));
       throw new RunnerError('INTERNAL_ERROR', record.error, 500);
    }
 }
@@ -324,15 +417,55 @@ async function finalizeRun(
    await withRunPersistLock(record.runId, async () => {
       await writeRunMetadata(projectRoot, record).catch(() => {});
       await removeLockFile(projectRoot);
+      dbPersist((db) => {
+         dbUpsertRun(db, projectRoot, record);
+         dbReleaseLock(db, projectRoot);
+      });
       activeRuns.delete(projectRoot);
    });
    runPersistChains.delete(record.runId);
 
-   void appendAuditLog(
-      'runner.stopped',
-      `Run ${record.runId} finished with status '${record.status}'`,
-      { enabled: activeRun.auditEnabled }
-   );
+   // Index the finished log file's metadata (full logs stay on disk).
+   try {
+      const logPath = resolveRunFilePath(getRunsDir(projectRoot), record.runId, '.log');
+      const { size } = await fs.stat(logPath);
+      dbPersist((db) =>
+         dbUpsertLogIndex(db, { runId: record.runId, logFile: record.logFile, sizeBytes: size })
+      );
+   } catch {
+      // Missing log file - nothing to index.
+   }
+
+   const auditEvent =
+      record.status === 'completed'
+         ? ('runner.completed' as const)
+         : record.status === 'cancelled'
+           ? ('runner.cancelled' as const)
+           : ('runner.failed' as const);
+   void appendAuditLog(auditEvent, `Run ${record.runId} finished with status '${record.status}'`, {
+      enabled: activeRun.auditEnabled,
+      projectRoot,
+      taskId: record.taskId,
+      runId: record.runId,
+   });
+
+   const notify = activeRun.notifications;
+   const shouldNotify =
+      notify.inApp &&
+      ((record.status === 'completed' && notify.onRunComplete) ||
+         (record.status === 'failed' && notify.onRunFail) ||
+         (record.status === 'cancelled' && notify.onRunCancel));
+   if (shouldNotify) {
+      dbPersist((db) => {
+         addNotification(db, {
+            type: 'runner',
+            title: `Run ${record.status}`,
+            message: `Run ${record.runId} finished with status '${record.status}'`,
+            metadata: { runId: record.runId, mode: record.mode, exitCode: record.exitCode },
+         });
+      });
+   }
+
    void pruneRunHistory(projectRoot).catch(() => {});
 }
 
@@ -361,6 +494,7 @@ export async function pruneRunHistory(projectRoot: string): Promise<void> {
 
    const cutoff = Date.now() - logRetentionDays * 24 * 60 * 60 * 1000;
    const keep = new Set(runIds.slice(-historyLimit));
+   const removedIds: string[] = [];
 
    for (const runId of runIds) {
       if (active?.runId === runId) continue;
@@ -375,8 +509,15 @@ export async function pruneRunHistory(projectRoot: string): Promise<void> {
       if (tooMany || tooOld) {
          await fs.unlink(path.join(runsDir, `${runId}.json`)).catch(() => {});
          await fs.unlink(path.join(runsDir, `${runId}.log`)).catch(() => {});
+         removedIds.push(runId);
       }
    }
+
+   dbPersist((db) => {
+      if (removedIds.length > 0) dbDeleteRuns(db, projectRoot, removedIds);
+      // Also bound DB-only rows (e.g. runs whose files were removed earlier).
+      dbPruneRuns(db, projectRoot, historyLimit, active?.runId ?? null);
+   });
 }
 
 /**
@@ -411,14 +552,12 @@ export function getActiveRun(projectRoot: string): RunRecord | null {
    return activeRun ? { ...activeRun.record } : null;
 }
 
-/**
- * Reads recent run metadata from `.taskmaster/runs/`, newest first.
- * Runs left in `running` state by a crashed/restarted server are
- * reconciled to `failed` when their pid is gone.
- */
-export async function getRunnerStatus(projectRoot: string): Promise<RunnerStatusData> {
+/** Legacy file-scan history (fallback when the database is unavailable). */
+async function readRecentRunsFromFiles(
+   projectRoot: string,
+   active: RunRecord | null
+): Promise<RunRecord[]> {
    const runsDir = getRunsDir(projectRoot);
-   const active = getActiveRun(projectRoot);
 
    let entries: string[] = [];
    try {
@@ -449,6 +588,7 @@ export async function getRunnerStatus(projectRoot: string): Promise<RunnerStatus
                record.finishedAt = record.finishedAt ?? new Date().toISOString();
                record.error = 'Process is no longer running (server was restarted or crashed)';
                await writeRunMetadata(projectRoot, record).catch(() => {});
+               dbPersist((db) => dbMarkRunInterrupted(db, record.runId, record.error ?? ''));
             }
          }
          recentRuns.push(record);
@@ -457,9 +597,54 @@ export async function getRunnerStatus(projectRoot: string): Promise<RunnerStatus
       }
    }
 
+   return recentRuns;
+}
+
+/**
+ * Returns runner status: the active run, the lock, and recent history.
+ * History comes from the `runner_runs` table when the database is available
+ * (with legacy `.taskmaster/runs/*.json` files imported once per process),
+ * falling back to the file scan otherwise. Runs left in `running` state by a
+ * crashed/restarted server are reconciled to `failed` when their pid is gone.
+ */
+export async function getRunnerStatus(projectRoot: string): Promise<RunnerStatusData> {
+   const active = getActiveRun(projectRoot);
+
+   await backfillRunsFromDisk(projectRoot).catch(() => {});
+
+   let recentRuns: RunRecord[] | null = null;
+   try {
+      const db = tryGetDb();
+      if (db) recentRuns = dbListRecentRuns(db, projectRoot, RECENT_RUNS_LIMIT);
+   } catch {
+      recentRuns = null;
+   }
+
+   if (recentRuns === null) {
+      recentRuns = await readRecentRunsFromFiles(projectRoot, active);
+   } else {
+      for (const record of recentRuns) {
+         const isTrackedActive = active?.runId === record.runId;
+         if (!isTrackedActive && (record.status === 'running' || record.status === 'queued')) {
+            const alive = record.pid !== null && isPidAlive(record.pid);
+            if (!alive) {
+               record.status = 'failed';
+               record.finishedAt = record.finishedAt ?? new Date().toISOString();
+               record.error = 'Process is no longer running (server was restarted or crashed)';
+               dbPersist((db) => dbMarkRunInterrupted(db, record.runId, record.error ?? ''));
+               await writeRunMetadata(projectRoot, record).catch(() => {});
+            }
+         }
+      }
+   }
+
    recentRuns.sort((a, b) => (a.startedAt < b.startedAt ? 1 : -1));
 
    const lock = await readLockFile(projectRoot);
+   if (!lock) {
+      // No file lock: make sure no stale DB mirror row lingers either.
+      dbPersist((db) => dbReleaseLock(db, projectRoot));
+   }
 
    return { activeRun: active, lock, recentRuns };
 }

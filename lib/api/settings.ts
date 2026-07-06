@@ -81,6 +81,18 @@ export function testWebhook(body: {
    });
 }
 
+export interface DatabaseDiagnostics {
+   path: string;
+   exists: boolean;
+   available: boolean;
+   sizeBytes: number | null;
+   migrationVersion: number | null;
+   projectCount: number | null;
+   runCount: number | null;
+   activeLockCount: number | null;
+   error?: string;
+}
+
 export interface Diagnostics {
    appVersion: string;
    nodeVersion: string;
@@ -91,15 +103,23 @@ export interface Diagnostics {
    runsDirPath: string;
    taskmaster: { path: string; ok: boolean; version?: string; error?: string };
    claude: { path: string; ok: boolean; version?: string; error?: string };
+   database: DatabaseDiagnostics;
 }
 
 export function fetchDiagnostics() {
    return request<Diagnostics>('/diagnostics');
 }
 
-export function runMaintenance(
-   action: 'clear-run-history' | 'clear-stale-lock' | 'clear-audit-log'
-) {
+export type MaintenanceAction =
+   | 'clear-run-history'
+   | 'clear-stale-lock'
+   | 'clear-audit-log'
+   | 'clear-notifications'
+   | 'init-db'
+   | 'vacuum-db'
+   | 'backup-db';
+
+export function runMaintenance(action: MaintenanceAction) {
    return request<{ detail: string }>('/maintenance', {
       method: 'POST',
       body: JSON.stringify({ action }),

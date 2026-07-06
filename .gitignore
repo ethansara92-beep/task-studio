@@ -59,3 +59,7 @@ next-env.d.ts
 # machine-local Task Studio settings & audit log
 .taskmaster/task-studio-settings.json*
 .taskmaster/task-studio-audit.log
+
+# Task Studio app database (SQLite + WAL/SHM sidecars) and backups
+.taskmaster/task-studio.sqlite*
+.taskmaster/backups/
